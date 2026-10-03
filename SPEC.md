@@ -52,13 +52,15 @@ firestore.rules         Firestore 安全规则模板（需要填邮箱后贴到 
 | name | 名称，如「床下 宜家袋1」「四层柜 第2层」 |
 | code | 标签编号，如 H1、D3、K2，可为空 |
 | spot | 在地图上属于哪块区域（见第 7 节的区域代码） |
-| mode | 记录方式：`item` 逐件记 / `list` 只记大概 / `count` 记数量 |
-| kind | 仅逐件记时使用：`box` 箱子袋子、`hang` 挂着的、`suitcase` 行李箱、`shoe` 鞋 |
-| out | true = 挂在外面、随手能拿到（衣柜挂衣区、挂衣架、玄关） |
-| fill | 满度：空 / 一半 / 快满 / 满 |
+| modes | 记录方式数组，**可多选**：`item` 记图片（逐件拍照）/ `list` 记大概（写清单）/ `count` 记数量（存货）。旧数据可能只有单字符串字段 `mode`，前端会自动兼容（`modesOf()` 的 fallback：有 `modes` 用 `modes`，没有就包一层 `[mode]`） |
+| kind | 仅 `modes` 包含 `item` 时使用：`box` 箱子袋子、`hang` 挂着的、`suitcase` 行李箱、`shoe` 鞋 |
+| out | 仅 `modes` 包含 `item` 时有意义：true = 挂在外面、随手能拿到（衣柜挂衣区、挂衣架、玄关） |
+| fill | 仅 `modes` 包含 `item` 且 `out` 为 false 时显示：满度，空 / 一半 / 快满 / 满 |
 | note | 说明（尺寸等） |
-| contents | 只记大概时的清单文字（多行） |
+| contents | `modes` 包含 `list` 时的清单文字（多行） |
 | order | 排序用数字 |
+
+一个收纳位置可以同时勾选多种记录方式（比如「睡衣筐」可以既逐件拍照、又写一段大概清单），详情页里按勾选的方式分别显示对应的区块。
 
 ### `items` 逐件记录的东西（衣服、鞋、床品）
 cat 类别、seasons 季节数组、colors 颜色数组、loc 所在位置 id（空 = 待整理）、note 备注、thumb 小图（base64，约 260px）、hasPhoto、status、created、lastWorn、wornCount、reviews（盘点记录，键名如 `2026秋`，值为 worn / not / drop）、kept。
