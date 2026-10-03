@@ -141,6 +141,7 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mu
 .stock .where{font-size:12px;color:var(--muted)}
 .stepper{display:flex;align-items:center;gap:4px}
 .stepper button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface-2);font-size:18px;font-weight:700;line-height:1}
+.stepper .del{width:auto;height:28px;border-radius:999px;background:none;border:1px solid var(--tag);color:var(--tag);font-size:12px;font-weight:400;padding:0 10px;margin-left:4px}
 .stepper .q{min-width:3.2em;text-align:center;font-family:var(--f-code);font-weight:600;font-size:17px;font-variant-numeric:tabular-nums}
 .stepper .q small{font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted)}
 .hit{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;text-align:left;width:100%}
@@ -384,9 +385,10 @@ function locRowHTML(l){const modes=modesOf(l);const parts=[];
    ${showFill?`<span class="fill f${fi}">${esc(l.fill)}</span>`:badge?`<span class="mode">${esc(badge)}</span>`:""}</button>`}
 
 /* ---------- stock ---------- */
-function stockRowHTML(s){
-  return `<div class="stock"><div><b>${esc(s.name)}</b><span class="where">${esc(locName(s.loc))}</span></div>
-   <div class="stepper">${S.ro?"":`<button type="button" data-step="-1" data-id="${esc(s.id)}" aria-label="减一">−</button>`}<span class="q">${esc(s.qty)}<small>${esc(s.unit||"")}</small></span>${S.ro?"":`<button type="button" data-step="1" data-id="${esc(s.id)}" aria-label="加一">＋</button>`}</div></div>`}
+function stockInner(s){
+  return `<div><b>${esc(s.name)}</b><span class="where">${esc(locName(s.loc))}</span></div>
+   <div class="stepper">${S.ro?"":`<button type="button" data-step="-1" data-id="${esc(s.id)}" aria-label="减一">−</button>`}<span class="q">${esc(s.qty)}<small>${esc(s.unit||"")}</small></span>${S.ro?"":`<button type="button" data-step="1" data-id="${esc(s.id)}" aria-label="加一">＋</button>`}${S.ro?"":`<button class="del" type="button" data-act="stock-del-ask" data-id="${esc(s.id)}" aria-label="删除这种存货">删除</button>`}</div>`}
+function stockRowHTML(s){return `<div class="stock" id="stock-${esc(s.id)}">${stockInner(s)}</div>`}
 function stockTabHTML(){
   const cl=S.locs.filter(l=>hasMode(l,"count"));
   let h=`<div class="stack"><div><h1>存货</h1><div class="sub">用掉一个点 −，买回来点 ＋</div></div>`;
@@ -532,16 +534,31 @@ function openItem(id){
   const l=locById(i.loc);
   const reviewFlag=i.kept===false||Object.values(i.reviews||{}).includes("drop")||Object.values(i.reviews||{}).filter(x=>x==="not").length>=2;
   openSheet(`<div class="row between"><h2>${esc(itemTitle(i))}</h2><button class="btn" type="button" data-act="close">关闭</button></div>
+   <input type="file" id="file-chg" accept="image/*" hidden>
    ${i.thumb?`<img class="big-photo" id="bigph" src="${i.thumb}" alt="">`:""}
    <dl class="kv"><dt>类别</dt><dd>${esc(i.cat)}</dd>${isShoe(i)?"":`<dt>季节</dt><dd>${esc((i.seasons||[]).join("、"))}</dd>`}
    ${(i.colors||[]).length?`<dt>颜色</dt><dd>${esc(i.colors.join("、"))}</dd>`:""}
    <dt>在哪</dt><dd>${l?.code?`<span class="code">${esc(l.code)}</span> `:""}${esc(locName(i.loc))}</dd>
    <dt>上次穿</dt><dd>${esc(last)}${i.wornCount?`（共记录 ${i.wornCount} 次）`:""}</dd>
    ${rv?`<dt>盘点</dt><dd>${esc(rv)}</dd>`:""}</dl>
-   ${S.ro?"":`<div class="row"><button class="btn primary" type="button" data-act="wore" data-id="${esc(i.id)}">今天穿了</button><button class="btn" type="button" data-act="edit" data-id="${esc(i.id)}">编辑 / 换位置</button>
+   ${S.ro?"":`<div class="row"><button class="btn primary" type="button" data-act="wore" data-id="${esc(i.id)}">今天穿了</button><button class="btn" type="button" data-act="chg-photo" data-id="${esc(i.id)}">${i.thumb?"换照片":"加照片"}</button><button class="btn" type="button" data-act="edit" data-id="${esc(i.id)}">编辑 / 换位置</button>
    ${reviewFlag?`<button class="btn" type="button" data-act="keep" data-id="${esc(i.id)}">决定留着</button>`:""}</div>
+   <div class="sub" id="chg-msg"></div>
    <div class="row" id="del-zone"><button class="btn danger" type="button" data-act="del-ask" data-id="${esc(i.id)}">已处理掉 / 删除</button></div>`}`);
   const im=$("#bigph");if(im&&i.hasPhoto)loadFull(i.id,im);
+}
+async function changeItemPhoto(id,file){
+  const msg=$("#chg-msg");if(msg)msg.textContent="照片上传中…";
+  try{
+    const thumb=await toJpeg(file,260,[.72,.6]);
+    const full=await toJpeg(file,900,[.75,.62,.5,.4]);
+    await S.db.doc("items/"+id).update({thumb,hasPhoto:true});
+    await S.db.doc("photos/"+id).set({data:full});
+    S.photoCache[id]=full;
+    const idx=S.items.findIndex(x=>x.id===id);if(idx>=0)S.items[idx]={...S.items[idx],thumb,hasPhoto:true};
+    toast("照片已更新");
+    if($("#sheet-root").innerHTML)openItem(id);
+  }catch(e){const m=$("#chg-msg");if(m)m.textContent="没保存成功，请再试一次"}
 }
 
 function locEditHTML(l){
@@ -631,6 +648,7 @@ document.addEventListener("click",async e=>{
   else if(a==="save")saveDraft(false);
   else if(a==="save-next")saveDraft(true);
   else if(a==="edit"){openForm(S.items.find(x=>x.id===t.dataset.id))}
+  else if(a==="chg-photo"){S.chgPhotoId=t.dataset.id;const f=$("#file-chg");if(f)f.click()}
   else if(a==="wore"){const i=S.items.find(x=>x.id===t.dataset.id);try{await S.db.doc("items/"+i.id).update({lastWorn:Date.now(),wornCount:(i.wornCount||0)+1});closeSheet();toast("记下了")}catch(_){toast("没保存成功")}}
   else if(a==="keep"){try{await S.db.doc("items/"+t.dataset.id).update({kept:true});closeSheet();toast("好的，留着")}catch(_){toast("没保存成功")}}
   else if(a==="del-ask"){$("#del-zone").innerHTML=`<span class="sub">确定删除这件吗？照片也会一起删掉。</span><button class="btn danger" type="button" data-act="del" data-id="${esc(t.dataset.id)}">确定删除</button><button class="btn" type="button" data-act="close">取消</button>`}
@@ -646,6 +664,11 @@ document.addEventListener("click",async e=>{
   else if(a==="stock-create"){const name=$("#st-name").value.trim();if(!name){$("#fm-msg").textContent="请填名称";return}
     const body={name,loc:t.dataset.loc,qty:Math.max(0,parseInt($("#st-qty").value,10)||0),unit:$("#st-unit").value.trim(),created:Date.now()};
     try{await S.db.collection("stock").add(body);closeSheet();toast("已添加")}catch(_){$("#fm-msg").textContent="没保存成功，请再试一次"}}
+  else if(a==="stock-del-ask"){const s=S.stock.find(x=>x.id===t.dataset.id);const el=document.getElementById("stock-"+t.dataset.id);if(!s||!el)return;
+    el.innerHTML=`<span class="sub">删除「${esc(s.name)}」？</span><div class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn danger" type="button" data-act="stock-del" data-id="${esc(s.id)}">确定删除</button><button class="btn" type="button" data-act="stock-del-cancel" data-id="${esc(s.id)}">取消</button></div>`}
+  else if(a==="stock-del-cancel"){const s=S.stock.find(x=>x.id===t.dataset.id);const el=document.getElementById("stock-"+t.dataset.id);if(s&&el)el.innerHTML=stockInner(s)}
+  else if(a==="stock-del"){const id=t.dataset.id;t.disabled=true;try{await S.db.doc("stock/"+id).delete();toast("已删除")}
+    catch(_){toast("没删除成功");const s=S.stock.find(x=>x.id===id);const el=document.getElementById("stock-"+id);if(s&&el)el.innerHTML=stockInner(s)}}
   else if(a==="contents-save"){try{await S.db.doc("locations/"+t.dataset.id).update({contents:$("#lc-contents").value});toast("清单已保存")}catch(_){toast("没保存成功")}}
   else if(a==="loc-save"){
     const modes=[...document.querySelectorAll('[data-fm-modes] .chip[aria-pressed="true"]')].map(c=>c.dataset.v);
@@ -672,6 +695,7 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",e=>{
   if(e.target.id==="file"&&e.target.files[0]){const f=e.target.files[0];draft._file=f;draft._preview=URL.createObjectURL(f);
     draft.note=$("#fm-note").value;draft.loc=$("#fm-loc").value;renderForm()}
+  if(e.target.id==="file-chg"&&e.target.files[0])changeItemPhoto(S.chgPhotoId,e.target.files[0]);
   if(e.target.id==="fLoc"){S.fLoc=e.target.value;render()}
   if(e.target.id==="sortTarget"){S.sortTarget=e.target.value;render()}
 });
