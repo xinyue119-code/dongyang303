@@ -87,8 +87,9 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mu
 .sheet-bg{position:fixed;inset:0;background:rgba(10,14,25,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow-y:auto;border-radius:18px 18px 0 0;padding-inline:16px;padding-block:14px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
 .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto}
-.photo-pick{aspect-ratio:4/3;max-width:100%;border:1.5px dashed var(--line);border-radius:var(--r);background:var(--surface);display:grid;place-items:center;overflow:hidden;color:var(--muted);text-align:center;padding:0;width:100%}
+.photo-pick{position:relative;aspect-ratio:4/3;max-width:100%;border:1.5px dashed var(--line);border-radius:var(--r);background:var(--surface);display:grid;place-items:center;overflow:hidden;color:var(--muted);text-align:center;padding:0;width:100%}
 .photo-pick img{width:100%;height:100%;object-fit:contain}
+.photo-pick .chg{position:absolute;right:8px;bottom:8px;background:rgba(10,14,25,.6);color:#fff;font-size:12px;padding:4px 10px;border-radius:999px}
 .big-photo{width:100%;max-height:52vh;object-fit:contain;border-radius:var(--r);background:var(--surface-2);aspect-ratio:4/3}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
 .kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0}
@@ -478,14 +479,15 @@ function renderForm(){
   const d=draft, edit=!!d.id;
   openSheet(`<div class="row between"><h2>${edit?"编辑":"录入一件"}</h2><button class="btn" type="button" data-act="close">关闭</button></div>
    <input type="file" id="file" accept="image/*" hidden>
-   <button class="photo-pick" type="button" data-act="pick">${d._preview?`<img src="${d._preview}" alt="">`:`<span>点这里拍照或选照片<br><span class="sub">平铺在床上拍，背景统一更好找</span></span>`}</button>
+   <button class="photo-pick" type="button" data-act="pick">${d._preview?`<img src="${d._preview}" alt=""><span class="chg">点击更换照片</span>`:`<span>点这里拍照或选照片<br><span class="sub">平铺在床上拍，背景统一更好找</span></span>`}</button>
    <label class="f">类别 *<div class="chips" data-fm="cat">${CATS.map(([c])=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.cat===c}">${esc(c)}</button>`).join("")}</div></label>
    <label class="f">季节（可多选，鞋可以不选）<div class="chips" data-fm="seasons">${SEASONS.map(s=>`<button class="chip" type="button" data-v="${s}" aria-pressed="${d.seasons.includes(s)}">${s}</button>`).join("")}</div></label>
    <label class="f">颜色（可不填）<div class="chips" data-fm="colors">${COLORS.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.colors.includes(c)}">${esc(c)}</button>`).join("")}</div></label>
    <label class="f">放在哪里<select id="fm-loc"><option value="">待整理（之后再放）</option>${itemLocs().map(l=>`<option value="${esc(l.id)}" ${d.loc===l.id?"selected":""}>${esc((l.code?l.code+"  ":"")+l.name)}</option>`).join("")}</select></label>
    <label class="f">备注（可不填）<input type="text" id="fm-note" placeholder="比如：优衣库黑色开衫" value="${esc(d.note||"")}"></label>
    <div class="row">${edit?`<button class="btn primary" type="button" data-act="save">保存</button>`:`<button class="btn primary" type="button" data-act="save-next">保存，下一件</button><button class="btn" type="button" data-act="save">保存</button>`}</div>
-   <div class="sub" id="fm-msg"></div>`);
+   <div class="sub" id="fm-msg"></div>
+   ${edit?`<div class="row" id="del-zone"><button class="btn danger" type="button" data-act="del-ask" data-id="${esc(d.id)}">已处理掉 / 删除</button></div>`:""}`);
 }
 async function toJpeg(file,max,qs){
   const url=URL.createObjectURL(file);
