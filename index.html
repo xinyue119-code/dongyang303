@@ -19,6 +19,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="config.js"></script>
+<script src="icons.js"></script>
 <style>
 /* Layout: phone-first single column, bottom tab bar, bottom sheets. Motif: 洗濯タグ-style location codes in mono, floor plan of 303. */
 :root{
@@ -60,6 +61,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;font-size:13px}
 .chip[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ci{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:hsl(var(--h) 75% 91%);color:hsl(var(--h) 48% 40%);flex:none;vertical-align:middle}
+.ci svg{width:72%;height:72%;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ci .f{fill:currentColor;fill-opacity:.22}.ci .s{fill:currentColor;stroke:none}
+.ci.lg{width:40px;height:40px}.ci.xl{width:60px;height:60px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ci{background:hsl(var(--h) 30% 26%);color:hsl(var(--h) 65% 80%)}}
+:root[data-theme="dark"] .ci{background:hsl(var(--h) 30% 26%);color:hsl(var(--h) 65% 80%)}
+.chip .ci{width:20px;height:20px;margin:-3px 4px -1px -6px}
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:4px}
+.chip.cat{border:1.5px solid transparent;background:none;border-radius:12px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;line-height:1.25;color:var(--fg);text-align:center;overflow-wrap:anywhere}
+.chip.cat .ci{margin:0;width:40px;height:40px}
+.chip.cat[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--fg);font-weight:600}
 .strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
 .strip .card{flex:0 0 108px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px}
@@ -86,6 +98,7 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mu
 .fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:6;background:var(--accent);color:var(--on-accent);border:0;border-radius:999px;padding:12px 18px;font-weight:700;font-size:15px;box-shadow:0 6px 18px rgba(20,30,60,.25)}
 .sheet-bg{position:fixed;inset:0;background:rgba(10,14,25,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow-y:auto;border-radius:18px 18px 0 0;padding-inline:16px;padding-block:14px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.sheet>*{flex-shrink:0}
 .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto}
 .photo-pick{position:relative;aspect-ratio:4/3;max-width:100%;border:1.5px dashed var(--line);border-radius:var(--r);background:var(--surface);display:grid;place-items:center;overflow:hidden;color:var(--muted);text-align:center;padding:0;width:100%}
 .photo-pick img{width:100%;height:100%;object-fit:contain}
@@ -208,6 +221,7 @@ function defaultReviewSeason(){const m=new Date().getMonth()+1;const cur=curSeas
 
 const modesOf = l => { if(!l) return ["item"]; if(Array.isArray(l.modes)&&l.modes.length) return l.modes; if(l.mode) return [l.mode]; return l.record===false?["list"]:["item"] };
 const hasMode = (l,m) => modesOf(l).includes(m);
+const catIcon = (c,size="") => {const d=(window.CAT_ICONS||{})[c];return d?`<span class="ci ${size}" style="--h:${d[0]}" aria-hidden="true"><svg viewBox="0 0 24 24">${d[1]}</svg></span>`:""};
 const locById = id => S.locs.find(l=>l.id===id);
 const itemLocs = () => S.locs.filter(l=>hasMode(l,"item"));
 const locName = id => { if(!id) return "待整理"; const l=locById(id); return l?l.name:"待整理"; };
@@ -220,7 +234,7 @@ const zawuLink = (text,id) => `<a href="${ZAWU_URL}${id?"#"+esc(id):""}">${text}
 function cardHTML(i,opts={}){
   const src=thumbSrc(i);
   return `<button class="card${opts.sel?" sel":""}" type="button" data-item="${esc(i.id)}"${opts.selectable?' data-pick="1"':""}>
-    <div class="ph">${src?`<img src="${src}" alt="" loading="lazy">`:"无照片"}</div>
+    <div class="ph">${src?`<img src="${src}" alt="" loading="lazy">`:(catIcon(i.cat,"xl")||"无照片")}</div>
     <div class="meta"><b>${esc(itemTitle(i))}</b><span>${esc(opts.sub ?? locName(i.loc))}</span></div>
     ${opts.selectable?`<span class="check">${opts.sel?"✓":""}</span>`:""}
   </button>`;
@@ -299,7 +313,7 @@ function homeHTML(){
   list.sort((a,b)=>(b.created||0)-(a.created||0));
   const usedCats=CATS.map(c=>c[0]).filter(c=>items.some(i=>i.cat===c));
   h+=`<section><h2>全部衣服和鞋</h2>
-    <div class="chips" data-f="fCat"><button class="chip" type="button" data-v="" aria-pressed="${!S.fCat}">全部</button>${usedCats.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${S.fCat===c}">${esc(c)}</button>`).join("")}</div>
+    <div class="chips" data-f="fCat"><button class="chip" type="button" data-v="" aria-pressed="${!S.fCat}">全部</button>${usedCats.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${S.fCat===c}">${catIcon(c)}${esc(c)}</button>`).join("")}</div>
     <div class="row"><div class="chips" data-f="fSeason">${SEASONS.map(s=>`<button class="chip" type="button" data-v="${s}" aria-pressed="${S.fSeason===s}">${s}</button>`).join("")}</div>
     <select id="fLoc" style="width:auto;flex:1;min-width:9em"><option value="">所有位置</option><option value="_none" ${S.fLoc==="_none"?"selected":""}>待整理</option>${itemLocs().map(l=>`<option value="${esc(l.id)}" ${S.fLoc===l.id?"selected":""}>${esc(l.name)}</option>`).join("")}</select></div>
     ${list.length?`<div class="grid">${list.map(i=>cardHTML(i)).join("")}</div>`:`<div class="empty">没有符合条件的</div>`}
@@ -442,7 +456,7 @@ function renderForm(){
   openSheet(`<div class="row between"><h2>${edit?"编辑":"录入一件"}</h2><button class="btn" type="button" data-act="close">关闭</button></div>
    <input type="file" id="file" accept="image/*" hidden>
    <button class="photo-pick" type="button" data-act="pick">${d._preview?`<img src="${d._preview}" alt=""><span class="chg">点击更换照片</span>`:`<span>点这里拍照或选照片<br><span class="sub">平铺在床上拍，背景统一更好找</span></span>`}</button>
-   <label class="f">类别 *<div class="chips" data-fm="cat">${CATS.map(([c])=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.cat===c}">${esc(c)}</button>`).join("")}</div></label>
+   <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">类别 *<div class="cats" data-fm="cat">${CATS.map(([c])=>`<button class="chip cat" type="button" data-v="${esc(c)}" aria-pressed="${d.cat===c}">${catIcon(c)}${esc(c)}</button>`).join("")}</div></div>
    <label class="f">季节（可多选，鞋可以不选）<div class="chips" data-fm="seasons">${SEASONS.map(s=>`<button class="chip" type="button" data-v="${s}" aria-pressed="${d.seasons.includes(s)}">${s}</button>`).join("")}</div></label>
    <label class="f">颜色（可不填）<div class="chips" data-fm="colors">${COLORS.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.colors.includes(c)}">${esc(c)}</button>`).join("")}</div></label>
    <label class="f">放在哪里<select id="fm-loc"><option value="">待整理（之后再放）</option>${itemLocs().map(l=>`<option value="${esc(l.id)}" ${d.loc===l.id?"selected":""}>${esc((l.code?l.code+"  ":"")+l.name)}</option>`).join("")}</select></label>
@@ -496,7 +510,7 @@ function openItem(id){
   openSheet(`<div class="row between"><h2>${esc(itemTitle(i))}</h2><button class="btn" type="button" data-act="close">关闭</button></div>
    <input type="file" id="file-chg" accept="image/*" hidden>
    ${i.thumb?`<img class="big-photo" id="bigph" src="${i.thumb}" alt="">`:""}
-   <dl class="kv"><dt>类别</dt><dd>${esc(i.cat)}</dd>${isShoe(i)?"":`<dt>季节</dt><dd>${esc((i.seasons||[]).join("、"))}</dd>`}
+   <dl class="kv"><dt>类别</dt><dd>${catIcon(i.cat)} ${esc(i.cat)}</dd>${isShoe(i)?"":`<dt>季节</dt><dd>${esc((i.seasons||[]).join("、"))}</dd>`}
    ${(i.colors||[]).length?`<dt>颜色</dt><dd>${esc(i.colors.join("、"))}</dd>`:""}
    <dt>在哪</dt><dd>${l?.code?`<span class="code">${esc(l.code)}</span> `:""}${esc(locName(i.loc))}</dd>
    <dt>上次穿</dt><dd>${esc(last)}${i.wornCount?`（共记录 ${i.wornCount} 次）`:""}</dd>
