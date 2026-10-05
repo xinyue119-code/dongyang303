@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>东阳303</title>
+<title>衣帽间</title>
 <meta name="theme-color" content="#fbf6ef">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="东阳303">
+<meta name="apple-mobile-web-app-title" content="衣帽间">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -175,7 +175,7 @@ img{max-width:100%}
 
 <main id="app">
   <div class="stack">
-    <div><h1>东阳<span class="num">303</span></h1><div class="sub">正在读取衣服和鞋…</div></div>
+    <div><h1>衣帽间</h1><div class="sub">正在读取衣服和鞋…</div></div>
     <div class="empty">衣服和鞋放在哪个箱子、哪个挂衣区，都会整理在这里。</div>
   </div>
 </main>
@@ -227,7 +227,7 @@ function defaultReviewSeason(){const m=new Date().getMonth()+1;const cur=curSeas
 const modesOf = l => { if(!l) return ["item"]; if(Array.isArray(l.modes)&&l.modes.length) return l.modes; if(l.mode) return [l.mode]; return l.record===false?["list"]:["item"] };
 const hasMode = (l,m) => modesOf(l).includes(m);
 // 三个整理 app 互相跳转：首页最上面放另外两个的入口
-const APPS=[["closet","东阳303","衣服和鞋","https://xinyue119-code.github.io/dongyang303/"],["zw","杂物间","杂物和存货","https://xinyue119-code.github.io/dongyang303-zawu/"],["cos","化妆台","化妆品","https://xinyue119-code.github.io/dongyang303-cosme/"]];
+const APPS=[["closet","衣帽间","衣服和鞋","https://xinyue119-code.github.io/dongyang303/"],["zw","杂物间","杂物和存货","https://xinyue119-code.github.io/dongyang303-zawu/"],["cos","化妆台","化妆品","https://xinyue119-code.github.io/dongyang303-cosme/"]];
 const hopsHTML = me => `<nav class="hops" aria-label="另外两个整理 app">${APPS.filter(a=>a[0]!==me).map(([,n,sub,u])=>`<a class="hop" href="${u}"><img src="${u}icon-192.png" alt=""><span><b>${n}</b><span>${sub}</span></span></a>`).join("")}</nav>`;
 const catIcon = (c,size="") => {const d=(window.CAT_ICONS||{})[c];return d?`<span class="ci ${size}" style="--h:${d[0]}" aria-hidden="true"><svg viewBox="0 0 24 24">${d[1]}</svg></span>`:""};
 const locById = id => S.locs.find(l=>l.id===id);
@@ -235,7 +235,8 @@ const itemLocs = () => S.locs.filter(l=>hasMode(l,"item"));
 const locName = id => { if(!id) return "待整理"; const l=locById(id); return l?l.name:"待整理"; };
 const activeItems = () => S.items.filter(i=>i.status!=="gone");
 const thumbSrc = i => i.thumb || "";
-const itemTitle = i => i.note ? i.note : ((i.colors&&i.colors[0]?i.colors[0]:"")+i.cat);
+const itemTitle = i => i.note ? i.note : ((i.brand?i.brand+" ":"")+(i.colors&&i.colors[0]?i.colors[0]:"")+i.cat);
+const brandsUsed = () => [...new Set(S.items.map(i=>i.brand).filter(Boolean))].sort();
 const isShoe = i => i.cat==="鞋";
 const zawuLink = (text,id) => `<a href="${ZAWU_URL}${id?"#"+esc(id):""}">${text}</a>`;
 
@@ -259,7 +260,7 @@ function renderTabs(){$("#tabs").innerHTML=TABS.map(([k,n])=>`<button type="butt
 $("#tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;S.tab=b.dataset.tab;try{localStorage.setItem("tab303",S.tab)}catch(_){}render();window.scrollTo(0,0)});
 
 /* ---------- main render ---------- */
-function header(sub){return `<div class="row between"><div class="brand"><img class="logo" src="icon-192.png" alt=""><div><h1>东阳<span class="num">303</span></h1><div class="sub">${sub}</div></div></div>${S.ro?'<span class="ro-pill">只读</span>':""}</div>`}
+function header(sub){return `<div class="row between"><div class="brand"><img class="logo" src="icon-192.png" alt=""><div><h1>衣帽间</h1><div class="sub">${sub}</div></div></div>${S.ro?'<span class="ro-pill">只读</span>':""}</div>`}
 function render(){
   renderTabs();
   $("#fab").hidden = S.ro || !S.db || !["home","sort"].includes(S.tab);
@@ -282,7 +283,7 @@ function hl(text,q){const t=esc(text);if(!q)return t;const qe=esc(q).replace(/[.
 function searchHTML(q){
   const ql=q.toLowerCase();
   const locHits=itemLocs().filter(l=>[l.name,l.code,l.note].join("\n").toLowerCase().includes(ql));
-  const itemHits=activeItems().filter(i=>[i.note,i.cat,(i.colors||[]).join(" "),locName(i.loc)].join(" ").toLowerCase().includes(ql));
+  const itemHits=activeItems().filter(i=>[i.note,i.brand,i.cat,(i.colors||[]).join(" "),locName(i.loc)].join(" ").toLowerCase().includes(ql));
   const n=locHits.length+itemHits.length;
   let h=`<section><div class="sub">找到 ${n} 处</div>`;
   if(!n)h+=`<div class="empty">没找到「${esc(q)}」。这里只找衣服和鞋，别的东西去${zawuLink("杂物间")}找。</div>`;
@@ -300,7 +301,7 @@ function homeHTML(){
   const pending=items.filter(i=>!i.loc||!locById(i.loc)).length;
   let h=`<div class="stack">${header(`衣服 ${clothes.length} 件 · 鞋 ${items.length-clothes.length} 双 · 现在是${cs}季`)}
    ${hopsHTML("closet")}
-   <input class="search big" id="gq" type="search" placeholder="找衣服：开衫、羽绒、H2…" value="${esc(S.gq)}" autocomplete="off">`;
+   <input class="search big" id="gq" type="search" placeholder="找衣服：优衣库、开衫、羽绒、H2…" value="${esc(S.gq)}" autocomplete="off">`;
   if(S.gq.trim())return h+searchHTML(S.gq.trim())+`</div>`;
   if(!items.length){
     h+=`<div class="empty">还没有录入衣服和鞋。把衣服平铺在床上，点右下角「＋ 录入」拍一张，选类别和季节就行。位置可以先不填，之后在「整理」里一起放进箱子。<br><br>衣服和鞋以外的东西（文具、存货、抽屉里的杂物）记在${zawuLink("杂物间")}。</div>`;
@@ -469,7 +470,9 @@ function renderForm(){
    <label class="f">季节（可多选，鞋可以不选）<div class="chips" data-fm="seasons">${SEASONS.map(s=>`<button class="chip" type="button" data-v="${s}" aria-pressed="${d.seasons.includes(s)}">${s}</button>`).join("")}</div></label>
    <label class="f">颜色（可不填）<div class="chips" data-fm="colors">${COLORS.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.colors.includes(c)}">${esc(c)}</button>`).join("")}</div></label>
    <label class="f">放在哪里<select id="fm-loc"><option value="">待整理（之后再放）</option>${itemLocs().map(l=>`<option value="${esc(l.id)}" ${d.loc===l.id?"selected":""}>${esc((l.code?l.code+"  ":"")+l.name)}</option>`).join("")}</select></label>
-   <label class="f">备注（可不填）<input type="text" id="fm-note" placeholder="比如：优衣库黑色开衫" value="${esc(d.note||"")}"></label>
+   <label class="f">品牌（可不填，填过的会出现在候选里）<input type="text" id="fm-brand" list="brand-list" placeholder="比如：优衣库 / GU / ZARA" value="${esc(d.brand||"")}" autocomplete="off"></label>
+   <datalist id="brand-list">${brandsUsed().map(b=>`<option value="${esc(b)}"></option>`).join("")}</datalist>
+   <label class="f">备注（可不填）<input type="text" id="fm-note" placeholder="比如：黑色开衫" value="${esc(d.note||"")}"></label>
    <div class="row">${edit?`<button class="btn primary" type="button" data-act="save">保存</button>`:`<button class="btn primary" type="button" data-act="save-next">保存，下一件</button><button class="btn" type="button" data-act="save">保存</button>`}</div>
    <div class="sub" id="fm-msg"></div>
    ${edit?`<div class="row" id="del-zone"><button class="btn danger" type="button" data-act="del-ask" data-id="${esc(d.id)}">已处理掉 / 删除</button></div>`:""}`);
@@ -486,7 +489,7 @@ async function toJpeg(file,max,qs){
 }
 async function saveDraft(next){
   const d=draft, msg=$("#fm-msg");
-  d.note=$("#fm-note").value.trim(); d.loc=$("#fm-loc").value;
+  d.note=$("#fm-note").value.trim(); d.brand=$("#fm-brand").value.trim(); d.loc=$("#fm-loc").value;
   if(!d.cat){msg.textContent="请先选一个类别";return}
   if(!d.seasons.length&&d.cat!=="鞋"){msg.textContent="请至少选一个季节";return}
   msg.textContent="保存中…";
@@ -495,7 +498,7 @@ async function saveDraft(next){
     let thumb=d.thumb||"", full=null;
     if(d._file){thumb=await toJpeg(d._file,260,[.72,.6]);full=await toJpeg(d._file,900,[.75,.62,.5,.4]);}
     const seasons=d.cat==="鞋"&&!d.seasons.length?[...SEASONS]:d.seasons;
-    const body={cat:d.cat,seasons,colors:d.colors,loc:d.loc,note:d.note,thumb,status:"active",hasPhoto:!!(full||d.hasPhoto)};
+    const body={cat:d.cat,seasons,colors:d.colors,loc:d.loc,note:d.note,brand:d.brand||"",thumb,status:"active",hasPhoto:!!(full||d.hasPhoto)};
     let id=d.id;
     if(id){await S.db.doc("items/"+id).update(body)}
     else{body.created=Date.now();body.lastWorn=0;body.wornCount=0;body.reviews={};const ref=S.db.collection("items").doc();id=ref.id;await ref.set(body)}
@@ -520,6 +523,7 @@ function openItem(id){
    <input type="file" id="file-chg" accept="image/*" hidden>
    ${i.thumb?`<img class="big-photo" id="bigph" src="${i.thumb}" alt="">`:""}
    <dl class="kv"><dt>类别</dt><dd>${catIcon(i.cat)} ${esc(i.cat)}</dd>${isShoe(i)?"":`<dt>季节</dt><dd>${esc((i.seasons||[]).join("、"))}</dd>`}
+   ${i.brand?`<dt>品牌</dt><dd>${esc(i.brand)}</dd>`:""}
    ${(i.colors||[]).length?`<dt>颜色</dt><dd>${esc(i.colors.join("、"))}</dd>`:""}
    <dt>在哪</dt><dd>${l?.code?`<span class="code">${esc(l.code)}</span> `:""}${esc(locName(i.loc))}</dd>
    <dt>上次穿</dt><dd>${esc(last)}${i.wornCount?`（共记录 ${i.wornCount} 次）`:""}</dd>
@@ -655,7 +659,7 @@ document.addEventListener("click",async e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.id==="file"&&e.target.files[0]){const f=e.target.files[0];draft._file=f;draft._preview=URL.createObjectURL(f);
-    draft.note=$("#fm-note").value;draft.loc=$("#fm-loc").value;renderForm()}
+    draft.note=$("#fm-note").value;draft.brand=$("#fm-brand").value;draft.loc=$("#fm-loc").value;renderForm()}
   if(e.target.id==="file-chg"&&e.target.files[0])changeItemPhoto(S.chgPhotoId,e.target.files[0]);
   if(e.target.id==="fLoc"){S.fLoc=e.target.value;render()}
   if(e.target.id==="sortTarget"){S.sortTarget=e.target.value;render()}
@@ -674,13 +678,13 @@ async function saveLabels(){
     g.font="22px sans-serif";g.fillText(l.name,x+W/2,y+118);
     const q=document.querySelector(`[data-qr="${l.id}"] canvas`);if(q)g.drawImage(q,x+W/2-70,y+136,140,140)});
   const blob=await new Promise(r=>c.toBlob(r,"image/png"));
-  const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download="东阳303-标签.png";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)
+  const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download="衣帽间-标签.png";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)
 }
 
 /* ---------- login ---------- */
 function loginHTML(){return `<form class="login" id="login-form" autocomplete="on">
   <img src="icon-512.png" alt="">
-  <h1>东阳<span class="num">303</span></h1>
+  <h1>衣帽间</h1>
   <input type="email" id="lg-email" placeholder="邮箱" autocomplete="username" required>
   <input type="password" id="lg-pass" placeholder="密码" autocomplete="current-password" required>
   <button class="btn primary" type="submit" id="lg-btn">登录</button>
