@@ -72,6 +72,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .chip.cat{border:1.5px solid transparent;background:none;border-radius:12px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;line-height:1.25;color:var(--fg);text-align:center;overflow-wrap:anywhere}
 .chip.cat .ci{margin:0;width:40px;height:40px}
 .chip.cat[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--fg);font-weight:600}
+.hops{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hop{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--fg);min-width:0}
+.hop img{width:34px;height:34px;border-radius:9px;flex:none}
+.hop b{font-size:14px;display:block;line-height:1.3}
+.hop span span{font-size:11px;color:var(--muted);display:block;line-height:1.3}
 .strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
 .strip .card{flex:0 0 108px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px}
@@ -186,7 +191,7 @@ const APP_URL = "https://xinyue119-code.github.io/dongyang303/";
 const ZAWU_URL = "https://xinyue119-code.github.io/dongyang303-zawu/";
 const CATS = [
   ["T恤/背心",1.2],["衬衫",1.5],["针织/毛衣",3],["卫衣",3.5],["外套",5],["大衣/羽绒",10],
-  ["裤子",2],["裙子",1.5],["连衣裙",2],["正装/套装",3],["运动服",1.5],["鞋",0],["床品",18],["其他",2]
+  ["裤子",2],["裙子",1.5],["连衣裙",2],["正装/套装",3],["运动服",1.5],["睡衣",2],["鞋",0],["床品",18],["其他",2]
 ];
 const CAT_VOL = Object.fromEntries(CATS);
 const SEASONS = ["春","夏","秋","冬"];
@@ -221,6 +226,9 @@ function defaultReviewSeason(){const m=new Date().getMonth()+1;const cur=curSeas
 
 const modesOf = l => { if(!l) return ["item"]; if(Array.isArray(l.modes)&&l.modes.length) return l.modes; if(l.mode) return [l.mode]; return l.record===false?["list"]:["item"] };
 const hasMode = (l,m) => modesOf(l).includes(m);
+// 三个整理 app 互相跳转：首页最上面放另外两个的入口
+const APPS=[["closet","东阳303","衣服和鞋","https://xinyue119-code.github.io/dongyang303/"],["zw","杂物间","杂物和存货","https://xinyue119-code.github.io/dongyang303-zawu/"],["cos","化妆台","化妆品","https://xinyue119-code.github.io/dongyang303-cosme/"]];
+const hopsHTML = me => `<nav class="hops" aria-label="另外两个整理 app">${APPS.filter(a=>a[0]!==me).map(([,n,sub,u])=>`<a class="hop" href="${u}"><img src="${u}icon-192.png" alt=""><span><b>${n}</b><span>${sub}</span></span></a>`).join("")}</nav>`;
 const catIcon = (c,size="") => {const d=(window.CAT_ICONS||{})[c];return d?`<span class="ci ${size}" style="--h:${d[0]}" aria-hidden="true"><svg viewBox="0 0 24 24">${d[1]}</svg></span>`:""};
 const locById = id => S.locs.find(l=>l.id===id);
 const itemLocs = () => S.locs.filter(l=>hasMode(l,"item"));
@@ -291,6 +299,7 @@ function homeHTML(){
   const clothes=items.filter(i=>!isShoe(i));
   const pending=items.filter(i=>!i.loc||!locById(i.loc)).length;
   let h=`<div class="stack">${header(`衣服 ${clothes.length} 件 · 鞋 ${items.length-clothes.length} 双 · 现在是${cs}季`)}
+   ${hopsHTML("closet")}
    <input class="search big" id="gq" type="search" placeholder="找衣服：开衫、羽绒、H2…" value="${esc(S.gq)}" autocomplete="off">`;
   if(S.gq.trim())return h+searchHTML(S.gq.trim())+`</div>`;
   if(!items.length){
@@ -354,7 +363,7 @@ function mapSVG(){
    ${zone("rack",82,476,118,36,"挂衣架")}
    ${zone("bedin",12,520,190,93,"床下·另一张")}
    ${zone("bedwin",12,619,190,93,"床下·靠窗")}
-   ${zone("longbox",208,520,66,98,"长箱×3")}
+   ${zone("longbox",208,520,66,98,"长箱×2")}
    ${zone("water",208,624,66,56,"水")}
    ${zone("bedside",12,718,60,52,"床头柜")}
    ${zone("smalltable",336,460,134,56,"小桌下")}
