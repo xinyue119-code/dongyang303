@@ -1,17 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 把两个邮箱换成真实的登录邮箱（全部小写）
-    function isOwner() {
-      return request.auth != null && request.auth.token.email == 'yangxinyue119@gmail.com';
-    }
-    function isViewer() {
+    // 这两个账号都能看、也都能改（邮箱全部小写，和 config.js 里的 EDITOR_EMAILS 保持一致）
+    function isMember() {
       return request.auth != null
         && request.auth.token.email in ['yangxinyue119@gmail.com', 'zhangluxin08@gmail.com'];
     }
     match /{document=**} {
-      allow read: if isViewer();
-      allow write: if isOwner();
+      allow read, write: if isMember();
     }
   }
 }
