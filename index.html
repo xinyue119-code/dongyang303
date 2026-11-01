@@ -132,6 +132,9 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mu
 .loc-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;text-align:left;width:100%}
 .loc-row .grow{flex:1;min-width:0}
 .loc-row .grow b{display:block;font-size:14px}
+.sim{display:flex;align-items:center;gap:10px;margin-top:8px}
+.sim img{width:48px;height:48px;object-fit:cover;border-radius:8px;flex:none}
+.sim .grow{flex:1;min-width:0}.sim .grow b,.sim .grow .sub{display:block;overflow-wrap:anywhere}
 .loc-row select{margin-top:4px;padding:4px 8px}
 .loc-row>.btn{padding:6px 11px;flex:none}
 .loc-row .grow span{font-size:12px;color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -509,6 +512,7 @@ function renderForm(){
   openSheet(`<div class="row between"><h2>${edit?"编辑":"录入一件"}</h2><button class="btn" type="button" data-act="close">关闭</button></div>
    <input type="file" id="file" accept="image/*" hidden>
    <button class="photo-pick" type="button" data-act="pick">${d._preview?`<img src="${d._preview}" alt=""><span class="chg">点击更换照片</span>`:`<span>点这里拍照或选照片<br><span class="sub">平铺在床上拍，背景统一更好找</span></span>`}</button>
+   <div id="sim-zone">${simHTML()}</div>
    <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">类别 *<div class="cats" data-fm="cat">${CATS.map(([c])=>`<button class="chip cat" type="button" data-v="${esc(c)}" aria-pressed="${d.cat===c}">${catIcon(c)}${esc(c)}</button>`).join("")}</div></div>
    <label class="f">季节（可多选，鞋可以不选）<div class="chips" data-fm="seasons">${SEASONS.map(s=>`<button class="chip" type="button" data-v="${s}" aria-pressed="${d.seasons.includes(s)}">${s}</button>`).join("")}</div></label>
    <label class="f">颜色（可不填）<div class="chips" data-fm="colors">${COLORS.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.colors.includes(c)}">${esc(c)}</button>`).join("")}</div></label>
@@ -530,16 +534,53 @@ async function toJpeg(file,max,qs){
     return out;
   }finally{URL.revokeObjectURL(url)}
 }
+// 照片查重：每张图缩成 17×16 灰度算「差值指纹」（256 位，看形状）；再看颜色：4×4 的大致配色（按整体亮度拉平，
+// 换个光线也能对上），以及衣服本身的色调（四边当背景，和背景差得多的格子算衣服）。三样都接近才算像。
+// 已有衣服的指纹从 thumb 现算，算过的记在内存里
+const SIGS=new Map();
+async function imgSig(src){
+  const im=await new Promise((res,rej)=>{const x=new Image();x.onload=()=>res(x);x.onerror=rej;x.src=src});
+  const c=document.createElement("canvas"),x=c.getContext("2d",{willReadFrequently:true});
+  c.width=17;c.height=16;x.drawImage(im,0,0,17,16);const p=x.getImageData(0,0,17,16).data,g=[];
+  for(let i=0;i<272;i++)g.push(p[i*4]*.3+p[i*4+1]*.59+p[i*4+2]*.11);
+  const bits=[];for(let r=0;r<16;r++)for(let k=0;k<16;k++)bits.push(g[r*17+k]<g[r*17+k+1]?1:0);
+  const px=i=>[p[i*4],p[i*4+1],p[i*4+2]],bg=[0,0,0];let nb=0;
+  for(let r=0;r<16;r++)for(let k=0;k<17;k++)if(!r||r===15||!k||k===16){px(r*17+k).forEach((v,j)=>bg[j]+=v);nb++}
+  bg.forEach((_,j)=>bg[j]/=nb);
+  let sub=[0,0,0],ns=0;for(let i=0;i<272;i++){const v=px(i);if(Math.abs(v[0]-bg[0])+Math.abs(v[1]-bg[1])+Math.abs(v[2]-bg[2])>60){v.forEach((y,j)=>sub[j]+=y);ns++}}
+  if(ns<8){sub=[0,0,0];for(let i=0;i<272;i++)px(i).forEach((y,j)=>sub[j]+=y)}
+  const t=sub[0]+sub[1]+sub[2]||1,hue=sub.map(v=>v/t);
+  c.width=4;c.height=4;x.drawImage(im,0,0,4,4);const q=x.getImageData(0,0,4,4).data,col=[];
+  for(let i=0;i<16;i++)col.push(q[i*4],q[i*4+1],q[i*4+2]);
+  const m=col.reduce((a,b)=>a+b,0)/48||1;
+  return {bits,hue,norm:col.map(v=>v/m*128)}}
+async function itemSig(i){const k=i.thumb.length,c=SIGS.get(i.id);if(c&&c.k===k)return c.sig;
+  try{const sig=await imgSig(i.thumb);SIGS.set(i.id,{k,sig});return sig}catch(_){return null}}
+function sigDist(a,b){let h=0;for(let i=0;i<256;i++)h+=a.bits[i]!==b.bits[i];
+  let n=0;for(let i=0;i<48;i++)n+=Math.abs(a.norm[i]-b.norm[i]);
+  const u=Math.abs(a.hue[0]-b.hue[0])+Math.abs(a.hue[1]-b.hue[1])+Math.abs(a.hue[2]-b.hue[2]);return {h,n:n/48,u}}
+async function findSimilar(src){
+  const me=await imgSig(src),out=[];
+  for(const i of activeItems()){if(!i.thumb||i.id===draft?.id)continue;const sg=await itemSig(i);if(!sg)continue;
+    const d=sigDist(me,sg);if(d.h<=40&&d.n<=10&&d.u<=.12)out.push({i,score:d.h/256+d.n/40+d.u})}
+  return out.sort((a,b)=>a.score-b.score).slice(0,3).map(x=>x.i)}
+async function simCheck(){const d=draft,f=d&&d._file;if(!f||d.id)return;d._sim=null;d._simOk=false;d._simPick="";
+  let list=[];try{list=await findSimilar(d._preview)}catch(_){}
+  if(draft!==d||d._file!==f)return;d._sim=list;const z=$("#sim-zone");if(z)z.innerHTML=simHTML()}
+function simHTML(){const d=draft;if(!d||d.id||d._simOk||d._simPick||!d._sim||!d._sim.length)return "";
+  return `<div class="notice"><b>照片和${d._sim.length>1?"这几件":"这件"}很像，是已经录过的吗？</b>
+   ${d._sim.map(i=>`<div class="sim"><img src="${i.thumb}" alt=""><span class="grow"><b>${esc(itemTitle(i))}</b><span class="sub">${esc(locName(i.loc))}</span></span><button class="btn" type="button" data-act="sim-pick" data-id="${esc(i.id)}">就是这件</button></div>`).join("")}
+   <div class="row" style="margin-top:8px"><button class="btn" type="button" data-act="sim-ignore">都不是，照样新增</button></div></div>`}
 // 新建时查重：找到很像的就在表单里提示，可以直接把那件挪到这次选的位置，不再新增一条
 function findDup(d){return d.id?null:activeItems().find(i=>sameThing(d,i)||sameThing(i,d))||null}
 function checkDup(atSave){
   const z=$("#dup-zone");if(!z||!draft||draft.id)return null;
   const d={...draft,note:$("#fm-note").value,brand:$("#fm-brand").value,loc:$("#fm-loc").value};
-  const hit=findDup(d);draft._dupId=hit?hit.id:"";
+  const hit=(draft._simPick&&S.items.find(x=>x.id===draft._simPick))||findDup(d);draft._dupId=hit?hit.id:"";
   if(!hit||draft._dupOk){z.innerHTML="";return null}
   const to=d.loc&&locById(d.loc), here=hit.loc&&hit.loc===d.loc;
   z.innerHTML=`<div class="notice"><b>已存在相似衣物【${esc(itemTitle(hit))}】</b>（位于：${esc(locName(hit.loc))}）。${atSave?"先确认一下再保存：":""}
-    <div class="row" style="margin-top:8px">${to&&!here?`<button class="btn primary" type="button" data-act="dup-move">直接移动到「${esc(to.name)}」</button>`:here?`<span class="sub">它已经在这个位置了。</span>`:""}
+    <div class="row" style="margin-top:8px">${to&&!here?`<button class="btn primary" type="button" data-act="dup-move">直接移动到「${esc(to.name)}」</button>`:here?`<span class="sub">它已经在这个位置了。</span>`:""}${to&&!here?"":`<button class="btn primary" type="button" data-act="close">那就不录了</button>`}
     <button class="btn" type="button" data-act="dup-open">看看那件</button><button class="btn" type="button" data-act="dup-ignore">不是同一件，照样新增</button></div></div>`;
   if(atSave){$("#fm-msg").textContent="";z.scrollIntoView({block:"center",behavior:"smooth"})}
   return hit}
@@ -730,6 +771,8 @@ document.addEventListener("click",async e=>{
   else if(a==="brand-pick"){const inp=$("#fm-brand");if(inp)inp.value=t.dataset.v;t.parentElement.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",String(c===t)));if(typeof checkDup==="function")checkDup()}
   else if(a==="dup-move"){const hit=S.items.find(x=>x.id===draft._dupId);const to=$("#fm-loc").value;if(!hit||!to)return;t.disabled=true;
     try{await S.db.doc("items/"+hit.id).update({loc:to});hit.loc=to;closeSheet();toast(`已把「${itemTitle(hit)}」移到 ${locName(to)}，没有新增`)}catch(_){t.disabled=false;toast("没保存成功")}}
+  else if(a==="sim-pick"){draft._simPick=t.dataset.id;draft._dupOk=false;$("#sim-zone").innerHTML="";checkDup(true)}
+  else if(a==="sim-ignore"){draft._simOk=true;$("#sim-zone").innerHTML=`<div class="sub">好的，当作新的一件。</div>`}
   else if(a==="dup-open"){const id=draft._dupId;if(id)openItem(id)}
   else if(a==="dup-ignore"){draft._dupOk=true;$("#dup-zone").innerHTML=`<div class="sub">好的，保存时会新增一件。</div>`}
   else if(a==="spot-edit"){const sp=t.dataset.sp;S.spotEdit=S.spotEdit===sp?null:sp;reopenSpot(sp)}
@@ -755,7 +798,7 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",e=>{
   if(["fm-note","fm-brand","fm-loc"].includes(e.target.id)&&draft&&!draft.id)checkDup(false);
   if(e.target.id==="file"&&e.target.files[0]){const f=e.target.files[0];draft._file=f;draft._preview=URL.createObjectURL(f);
-    draft.note=$("#fm-note").value;draft.brand=$("#fm-brand").value;draft.loc=$("#fm-loc").value;renderForm();checkDup(false)}
+    draft.note=$("#fm-note").value;draft.brand=$("#fm-brand").value;draft.loc=$("#fm-loc").value;renderForm();checkDup(false);simCheck()}
   if(e.target.id==="file-chg"&&e.target.files[0])changeItemPhoto(S.chgPhotoId,e.target.files[0]);
   if(e.target.dataset.lspot){const l=locById(e.target.dataset.lspot),to=e.target.value;if(!l||to===l.spot)return;const from=l.spot;
     S.db.doc("locations/"+l.id).update({spot:to,order:Date.now()}).then(()=>{toast(`${l.name} 挪到了 ${SPOTS[to]}`);reopenSpot(from)}).catch(()=>toast("没保存成功"))}
