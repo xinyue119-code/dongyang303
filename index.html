@@ -204,8 +204,10 @@ const APP_URL = "https://xinyue119-code.github.io/dongyang303/";
 const ZAWU_URL = "https://xinyue119-code.github.io/dongyang303-zawu/";
 const CATS = [
   ["T恤/背心",1.2],["衬衫",1.5],["针织/毛衣",3],["卫衣",3.5],["外套",5],["大衣/羽绒",10],
-  ["裤子",2],["裙子",1.5],["连衣裙",2],["正装/套装",3],["运动服",1.5],["睡衣",2],["围巾",1],["帽子",1],["袜子",0.3],["鞋",0],["床品",18],["其他",2]
+  ["裤子",2],["裙子",1.5],["连衣裙",2],["正装/套装",3],["运动服",1.5],["睡衣",2],["围巾",1],["帽子",1],["袜子",0.3],["鞋",0],["床品",18],["其他",2],["回到c酱身边",2]
 ];
+// 这些类别录入时可以不选季节（不选就当四季都有）
+const NO_SEASON = ["鞋","回到c酱身边"];
 const CAT_VOL = Object.fromEntries(CATS);
 const SEASONS = ["春","夏","秋","冬"];
 const COLORS = ["黑","白","灰","米/卡其","棕","蓝","绿","红/粉","黄","紫","花色"];
@@ -514,7 +516,7 @@ function renderForm(){
    <button class="photo-pick" type="button" data-act="pick">${d._preview?`<img src="${d._preview}" alt=""><span class="chg">点击更换照片</span>`:`<span>点这里拍照或选照片<br><span class="sub">平铺在床上拍，背景统一更好找</span></span>`}</button>
    <div id="sim-zone">${simHTML()}</div>
    <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">类别 *<div class="cats" data-fm="cat">${CATS.map(([c])=>`<button class="chip cat" type="button" data-v="${esc(c)}" aria-pressed="${d.cat===c}">${catIcon(c)}${esc(c)}</button>`).join("")}</div></div>
-   <label class="f">季节（可多选，鞋可以不选）<div class="chips" data-fm="seasons">${SEASONS.map(s=>`<button class="chip" type="button" data-v="${s}" aria-pressed="${d.seasons.includes(s)}">${s}</button>`).join("")}</div></label>
+   <label class="f">季节（可多选，鞋和「回到c酱身边」可以不选）<div class="chips" data-fm="seasons">${SEASONS.map(s=>`<button class="chip" type="button" data-v="${s}" aria-pressed="${d.seasons.includes(s)}">${s}</button>`).join("")}</div></label>
    <label class="f">颜色（可不填）<div class="chips" data-fm="colors">${COLORS.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.colors.includes(c)}">${esc(c)}</button>`).join("")}</div></label>
    <label class="f">放在哪里<select id="fm-loc"><option value="">待整理（之后再放）</option>${itemLocs().map(l=>`<option value="${esc(l.id)}" ${d.loc===l.id?"selected":""}>${esc((l.code?l.code+"  ":"")+l.name)}</option>`).join("")}</select></label>
    <div class="f">品牌（可不填，点下面的直接填入）<input type="text" id="fm-brand" placeholder="比如：优衣库 / GU / ZARA" value="${esc(d.brand||"")}" autocomplete="off">${brandChips(d.brand)}</div>
@@ -589,13 +591,13 @@ async function saveDraft(next){
   d.note=$("#fm-note").value.trim(); d.brand=normBrand($("#fm-brand").value); d.loc=$("#fm-loc").value;
   if(!d.cat){msg.textContent="请先选一个类别";return}
   if(!d.id&&!d._dupOk&&checkDup(true))return;
-  if(!d.seasons.length&&d.cat!=="鞋"){msg.textContent="请至少选一个季节";return}
+  if(!d.seasons.length&&!NO_SEASON.includes(d.cat)){msg.textContent="请至少选一个季节";return}
   msg.textContent="保存中…";
   document.querySelectorAll('[data-act="save"],[data-act="save-next"]').forEach(b=>b.disabled=true);
   try{
     let thumb=d.thumb||"", full=null;
     if(d._file){thumb=await toJpeg(d._file,260,[.72,.6]);full=await toJpeg(d._file,900,[.75,.62,.5,.4]);}
-    const seasons=d.cat==="鞋"&&!d.seasons.length?[...SEASONS]:d.seasons;
+    const seasons=NO_SEASON.includes(d.cat)&&!d.seasons.length?[...SEASONS]:d.seasons;
     const body={cat:d.cat,seasons,colors:d.colors,loc:d.loc,note:d.note,brand:normBrand(d.brand),thumb,status:"active",hasPhoto:!!(full||d.hasPhoto)};
     let id=d.id;
     if(id){await S.db.doc("items/"+id).update(body)}
