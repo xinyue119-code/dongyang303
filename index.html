@@ -132,6 +132,8 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mu
 .loc-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;text-align:left;width:100%}
 .loc-row .grow{flex:1;min-width:0}
 .loc-row .grow b{display:block;font-size:14px}
+.loc-row select{margin-top:4px;padding:4px 8px}
+.loc-row>.btn{padding:6px 11px;flex:none}
 .loc-row .grow span{font-size:12px;color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mode{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
 .fill{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
@@ -213,7 +215,7 @@ const SPOTS = {
 const BOX_L = 47;
 
 const S = { items:[], locs:[], tab:"home", q:"", gq:"", fCat:"", fSeason:"", fLoc:"", loaded:{i:false,l:false},
-  sortSel:new Set(), locSel:new Set(), locSelFor:null, sortTarget:"", rvSeason:null, db:null, dl:null, ro:false, photoCache:{},
+  sortSel:new Set(), locSel:new Set(), locSelFor:null, spotEdit:null, sortTarget:"", rvSeason:null, db:null, dl:null, ro:false, photoCache:{},
   sticky:{cat:"",seasons:null,loc:""} };
 
 const $ = (s,r=document)=>r.querySelector(s);
@@ -636,12 +638,21 @@ function openLoc(id){
    ${body}${S.ro?"":locEditHTML(l)}`,id);
 }
 function reopenLoc(id){const top=$(".sheet")?.scrollTop||0;openLoc(id);const sh=$(".sheet");if(sh){sh.style.animation="none";sh.scrollTop=top}}
+// 调整模式：每个袋子/箱子一行，↑↓ 换前后顺序，下拉框把它挪到房间别的地方
+function spotEditRow(l,i,n){
+  return `<div class="loc-row">${l.code?`<span class="code">${esc(l.code)}</span>`:""}<span class="grow"><b>${esc(l.name)}</b>
+   <select data-lspot="${esc(l.id)}" aria-label="挪到">${Object.entries(SPOTS).map(([k,v])=>`<option value="${k}" ${l.spot===k?"selected":""}>${k===l.spot?"在 ":"挪到 "}${v}</option>`).join("")}</select></span>
+   <button class="btn" type="button" data-act="lorder" data-id="${esc(l.id)}" data-d="-1" ${i?"":"disabled"} aria-label="往前">↑</button>
+   <button class="btn" type="button" data-act="lorder" data-id="${esc(l.id)}" data-d="1" ${i<n-1?"":"disabled"} aria-label="往后">↓</button></div>`}
 function openSpot(spot){const ls=spotLocs(spot);const other=S.locs.some(l=>l.spot===spot&&modesOf(l).some(m=>m!=="item"));
   if(ls.length===1&&S.ro){openLoc(ls[0].id);return}
-  openSheet(`<div class="row between"><h2>${SPOTS[spot]}</h2><button class="btn" type="button" data-act="close">关闭</button></div>
-   ${ls.map(locRowHTML).join("")||'<div class="empty">这里没有放衣服或鞋的位置</div>'}
+  const ed=S.spotEdit===spot&&!S.ro&&ls.length;
+  openSheet(`<div class="row between"><h2>${SPOTS[spot]}</h2><div class="row">${!S.ro&&ls.length?`<button class="btn" type="button" data-act="spot-edit" data-sp="${spot}">${ed?"完成":"调整位置"}</button>`:""}<button class="btn" type="button" data-act="close">关闭</button></div></div>
+   ${ed?`<div class="sub">点 ↑↓ 换前后顺序；要搬到别处，在下拉框里选新地方。里面的衣服跟着一起走。</div>${ls.map((l,i)=>spotEditRow(l,i,ls.length)).join("")}`:
+     ls.map(locRowHTML).join("")||'<div class="empty">这里没有放衣服或鞋的位置</div>'}
    ${other?`<div class="sub">这里放的杂物，${zawuLink("去杂物间看")}。</div>`:""}
    ${S.ro?"":`<button class="btn primary" type="button" data-act="new-loc" data-spot-pre="${spot}">＋ 在${SPOTS[spot]}加一个收纳</button>`}`)}
+function reopenSpot(spot){const top=$(".sheet")?.scrollTop||0;openSpot(spot);const sh=$(".sheet");if(sh){sh.style.animation="none";sh.scrollTop=top}}
 function openNewLoc(pre){
   openSheet(`<div class="row between"><h2>添加收纳位置</h2><button class="btn" type="button" data-act="close">关闭</button></div>
    <label class="f">名称<input type="text" id="lc-name" placeholder="比如：床下 宜家袋5 / 衣服箱5"></label>
@@ -721,6 +732,14 @@ document.addEventListener("click",async e=>{
     try{await S.db.doc("items/"+hit.id).update({loc:to});hit.loc=to;closeSheet();toast(`已把「${itemTitle(hit)}」移到 ${locName(to)}，没有新增`)}catch(_){t.disabled=false;toast("没保存成功")}}
   else if(a==="dup-open"){const id=draft._dupId;if(id)openItem(id)}
   else if(a==="dup-ignore"){draft._dupOk=true;$("#dup-zone").innerHTML=`<div class="sub">好的，保存时会新增一件。</div>`}
+  else if(a==="spot-edit"){const sp=t.dataset.sp;S.spotEdit=S.spotEdit===sp?null:sp;reopenSpot(sp)}
+  else if(a==="lorder"){
+    // 只在这个地方的几个位置之间换 order；原来的 order 值重新分给新顺序，别处的位置不受影响
+    const l=locById(t.dataset.id);if(!l)return;const ls=spotLocs(l.spot),i=ls.indexOf(l),j=i+Number(t.dataset.d);if(j<0||j>=ls.length)return;
+    const vals=ls.map(x=>x.order??0).sort((a,b)=>a-b);if(new Set(vals).size<vals.length)vals.forEach((_,k)=>vals[k]=vals[0]+k);
+    const next=[...ls];[next[i],next[j]]=[next[j],next[i]];
+    const b=S.db.batch();let n=0;next.forEach((x,k)=>{if(x.order!==vals[k]){b.update(S.db.doc("locations/"+x.id),{order:vals[k]});n++}});
+    try{if(n)await b.commit();reopenSpot(l.spot)}catch(_){toast("没保存成功")}}
   else if(a==="lsel-toggle"){const id=t.dataset.id;S.locSel.clear();S.locSelFor=S.locSelFor===id?null:id;reopenLoc(id)}
   else if(a==="lsel-all"){const id=t.dataset.id,its=activeItems().filter(i=>i.loc===id);if(S.locSel.size===its.length)S.locSel.clear();else its.forEach(i=>S.locSel.add(i.id));reopenLoc(id)}
   else if(a==="lmove"){const id=t.dataset.id,v=$("#lmove-to").value;if(!v){toast("先选要移到哪里");return}const to=v==="_none"?"":v;
@@ -738,6 +757,8 @@ document.addEventListener("change",e=>{
   if(e.target.id==="file"&&e.target.files[0]){const f=e.target.files[0];draft._file=f;draft._preview=URL.createObjectURL(f);
     draft.note=$("#fm-note").value;draft.brand=$("#fm-brand").value;draft.loc=$("#fm-loc").value;renderForm();checkDup(false)}
   if(e.target.id==="file-chg"&&e.target.files[0])changeItemPhoto(S.chgPhotoId,e.target.files[0]);
+  if(e.target.dataset.lspot){const l=locById(e.target.dataset.lspot),to=e.target.value;if(!l||to===l.spot)return;const from=l.spot;
+    S.db.doc("locations/"+l.id).update({spot:to,order:Date.now()}).then(()=>{toast(`${l.name} 挪到了 ${SPOTS[to]}`);reopenSpot(from)}).catch(()=>toast("没保存成功"))}
   if(e.target.id==="fLoc"){S.fLoc=e.target.value;e.target.blur();renderKeep()}
   if(e.target.id==="sortTarget"){S.sortTarget=e.target.value;e.target.blur();renderKeep()}
 });
