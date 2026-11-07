@@ -87,7 +87,7 @@ name、loc（位置 id）、qty 数量、unit 单位、created。
 
 依照主人手绘的平面图，从上到下：
 
-- 用水区：`toilet` 卫生间（卫生巾存货）、`shelf` 收纳架、`basin` 洗手台下橱柜、`washer` 洗衣机旁（洗衣液等存货）
+- 用水区：`toilet` 卫生间（卫生巾存货）、`shelf` 收纳架（2026-11 起在洗衣机旁边，不在卫生间）、`basin` 洗手台下橱柜、`washer` 洗衣机旁（洗衣液等存货）
 - `genkan` 玄关（鞋，逐件拍照）、`kitchen` 厨房橱柜（上方 2 个、下方 1 个、灶台下 1 个）、`cl` 衣柜 CL（上层蓝箱 B1/B2，下层挂衣区 CL＋行李箱 S1/S2）
 - 房间：`kotatsu` こたつ上、`boxes` 进门两边各 3 个叠在一起的收纳箱（衣服箱 H1–H4、杂物箱 Z1–Z2）、`shelf3` 三层架 A1–A3、`desktop` 桌上小盒 D1–D4（文具、梳子、驱蚊药、印章等）
 - `cabinet` 四层柜 K1–K4、`rack` 挂衣架、`bedin` 床下（另一张床，暂时空着）、`bedwin` 床下（靠窗那张床，宜家袋 W1–W3）、`longbox` 床边长箱 L1–L3（三个摞在一起）、`water` 床边的水（分种类记数量）、`bedside` 床头柜
