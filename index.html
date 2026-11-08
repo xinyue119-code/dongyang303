@@ -132,6 +132,12 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mu
 .loc-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;text-align:left;width:100%}
 .loc-row .grow{flex:1;min-width:0}
 .loc-row .grow b{display:block;font-size:14px}
+.btn.sm{padding:4px 10px;font-size:13px}
+.wx-main{display:flex;align-items:center;gap:14px}.wx-now{font-size:44px;font-weight:700;line-height:1}
+.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.outfit{width:100%;text-align:left;gap:8px;font:inherit;color:inherit;margin-bottom:8px}
+.of-thumbs{display:flex;gap:6px;flex-wrap:wrap}.of-thumbs img,.of-ph{width:46px;height:46px;border-radius:8px;object-fit:cover;background:var(--surface-2);display:grid;place-items:center}
+.feel{font-weight:600}.feel.f-2,.feel.f-1{color:hsl(210 60% 45%)}.feel.f0{color:var(--ok)}.feel.f1,.feel.f2{color:var(--tag)}
 .sim{display:flex;align-items:center;gap:10px;margin-top:8px}
 .sim img{width:48px;height:48px;object-fit:cover;border-radius:8px;flex:none}
 .sim .grow{flex:1;min-width:0}.sim .grow b,.sim .grow .sub{display:block;overflow-wrap:anywhere}
@@ -287,9 +293,10 @@ const ICONS={
  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>',
  map:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 10h8V3M14 21v-7h7"/></svg>',
  sort:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8h18v12H3zM3 8l2-4h14l2 4M9 12h6"/></svg>',
+ today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="3.500"/><path d="M9 2.500v1.500M3.500 9H2M4.800 4.800l1 1M13.200 4.800l-1 1"/><path d="M10 20h8.500a3.500 3.500 0 0 0 0-7 5 5 0 0 0-9.500 1.500A2.800 2.800 0 0 0 10 20z"/></svg>',
  review:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>'};
 // 盘点最近不常用，不放在底部分页里，入口在「整理」页最下面
-const TABS=[["home","首页"],["map","地图"],["sort","整理"]];
+const TABS=[["home","首页"],["today","今天穿"],["map","地图"],["sort","整理"]];
 function renderTabs(){$("#tabs").innerHTML=TABS.map(([k,n])=>`<button type="button" data-tab="${k}" ${S.tab===k?'aria-current="page"':""}>${ICONS[k]}${n}</button>`).join("")}
 $("#tabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(!b)return;S.tab=b.dataset.tab;try{localStorage.setItem("tab303",S.tab)}catch(_){}$("#app").style.minHeight="";render();window.scrollTo(0,0)});
 
@@ -309,6 +316,7 @@ function render(){
   if(S.tab==="home")app.innerHTML=homeHTML();
   else if(S.tab==="map")app.innerHTML=mapHTML();
   else if(S.tab==="sort")app.innerHTML=sortHTML();
+  else if(S.tab==="today"){app.innerHTML=todayHTML();loadWeather()}
   else app.innerHTML=reviewHTML();
   if(scrollY!==y)scrollTo(0,y);
   if(S.tab==="sort")drawLabelQRs();
@@ -475,6 +483,114 @@ function sortHTML(){
 }
 function drawLabelQRs(){if(!window.QRCode)return;document.querySelectorAll("[data-qr]").forEach(el=>{if(el.childNodes.length)return;
   try{new QRCode(el,{text:(hasMode(locById(el.dataset.qr),"item")?APP_URL:ZAWU_URL)+"#"+el.dataset.qr,width:172,height:172,correctLevel:QRCode.CorrectLevel.M})}catch(_){}})}
+
+/* ---------- today：今天的天气、怎么穿、穿搭日记 ---------- */
+// 天气用 Open-Meteo（免费、不用账号）。地点只存在这台手机的 localStorage 里，坐标保留两位小数（约 1km）。
+// 穿搭日记存在 outfits 集合，文档名 = 日期_账号uid，每人一天一条；by 记账号邮箱，两个人各看各的。
+const FEELS=[["-2","太冷"],["-1","有点冷"],["0","刚好"],["1","有点热"],["2","太热"]];
+const feelName=v=>(FEELS.find(f=>f[0]===String(v))||[])[1]||"";
+const WMO=c=>c===0?"晴":c<=2?"晴间多云":c===3?"阴":c<=48?"雾":c<=57?"毛毛雨":c<=67?"雨":c<=77?"雪":c<=82?"阵雨":c<=86?"阵雪":"雷雨";
+const dayKey=(d=new Date())=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+// 按白天的体感最高温给建议；cats 是推荐看看的类别
+const BANDS=[
+  {min:28,txt:"很热：短袖、背心、裙子，选透气的",cats:["T恤/背心","裙子","连衣裙"]},
+  {min:23,txt:"暖和：短袖或薄衬衫，薄长裤、裙子都行",cats:["T恤/背心","衬衫","裤子","裙子","连衣裙"]},
+  {min:18,txt:"舒服偏凉：长袖衬衫或薄针织，早晚带一件薄外套",cats:["衬衫","针织/毛衣","卫衣","外套","裤子"]},
+  {min:13,txt:"凉：针织或卫衣，外面加外套",cats:["针织/毛衣","卫衣","外套","裤子"]},
+  {min:8,txt:"冷：毛衣＋外套或大衣",cats:["针织/毛衣","外套","大衣/羽绒","裤子"]},
+  {min:-99,txt:"很冷：羽绒或大衣＋毛衣，围巾帽子都戴上",cats:["大衣/羽绒","针织/毛衣","围巾","帽子","裤子"]}];
+function wxPlace(){try{return JSON.parse(localStorage.getItem("wxPlace")||"null")}catch(_){return null}}
+function setWxPlace(pl){try{localStorage.setItem("wxPlace",JSON.stringify(pl))}catch(_){}S.wx=null;S.wxErr="";loadWeather(true)}
+async function loadWeather(force){
+  const pl=wxPlace();if(!pl||S.wxLoading||(!force&&S.wxErr))return;
+  if(!force&&S.wx&&S.wx.key===pl.lat+","+pl.lon&&Date.now()-S.wx.at<30*60e3)return;
+  S.wxLoading=true;
+  try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${pl.lat}&longitude=${pl.lon}&current=temperature_2m,apparent_temperature,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_probability_max&timezone=auto&forecast_days=1`;
+    const j=await (await fetch(u)).json();const d=j.daily;
+    S.wx={key:pl.lat+","+pl.lon,at:Date.now(),now:Math.round(j.current.temperature_2m),feel:Math.round(j.current.apparent_temperature),
+      code:d.weather_code[0],tmax:Math.round(d.temperature_2m_max[0]),tmin:Math.round(d.temperature_2m_min[0]),
+      amax:Math.round(d.apparent_temperature_max[0]),amin:Math.round(d.apparent_temperature_min[0]),rain:d.precipitation_probability_max[0]??0};S.wxErr=""}
+  catch(_){S.wxErr="天气没取到，稍后再试"}
+  S.wxLoading=false;if(S.tab==="today")renderKeep()}
+function useMyLocation(){
+  if(!navigator.geolocation){toast("这台手机不能定位，搜城市吧");return}
+  toast("正在定位…");
+  navigator.geolocation.getCurrentPosition(p=>setWxPlace({name:"现在的位置",lat:+p.coords.latitude.toFixed(2),lon:+p.coords.longitude.toFixed(2)}),
+    ()=>toast("没拿到位置，可以搜城市"),{timeout:10000,maximumAge:3600e3})}
+async function searchCity(q){const box=$("#city-res");if(!q||!box)return;box.innerHTML='<div class="sub">搜索中…</div>';
+  const geo=async n=>((await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(n)}&count=6&language=zh`)).json()).results||[]);
+  try{let rs=await geo(q);
+    // 「大阪」这种短的中文名查不到，加个「市」再查一次
+    if(!rs.length&&!/[市县縣区區]$/.test(q)&&/[\u4e00-\u9fff]/.test(q))rs=await geo(q+"市");
+    S.cityRes=rs;
+    box.innerHTML=rs.length?rs.map((r,k)=>`<button class="loc-row" type="button" data-act="city-pick" data-k="${k}"><span class="grow"><b>${esc(r.name)}</b><span>${esc([r.admin1,r.country].filter(Boolean).join(" · "))}</span></span></button>`).join(""):'<div class="sub">没找到，换个写法试试（比如用英文或日文）</div>'}
+  catch(_){box.innerHTML='<div class="sub">没搜到，检查一下网络</div>'}}
+const myOutfits=()=>(S.outfits||[]).filter(o=>o.by===(S.user?.email||"").toLowerCase()).sort((a,b)=>a.date<b.date?1:-1);
+function outfitLine(o,big){const its=(o.items||[]).map(id=>S.items.find(i=>i.id===id)).filter(Boolean);
+  const w=o.w?`${o.w.tmax}°/${o.w.tmin}° ${WMO(o.w.code)}`:"";
+  return `<button class="panel outfit" type="button" data-act="of-open" data-date="${esc(o.date)}">
+   <div class="row between"><b>${o.date===dayKey()?"今天":esc(o.date.slice(5).replace("-","/"))}</b><span class="sub">${esc(w)}${o.feel!=null&&o.feel!==""?` · <span class="feel f${esc(o.feel)}">${esc(feelName(o.feel))}</span>`:""}</span></div>
+   ${its.length?`<div class="of-thumbs">${its.slice(0,big?12:6).map(i=>i.thumb?`<img src="${i.thumb}" alt="${esc(itemTitle(i))}">`:`<span class="of-ph">${catIcon(i.cat)}</span>`).join("")}</div>`:""}
+   ${o.note?`<div class="sub" style="text-align:left">${esc(o.note)}</div>`:""}</button>`}
+function todayHTML(){
+  const pl=wxPlace(),wx=S.wx,mine=myOutfits(),today=mine.find(o=>o.date===dayKey());
+  let h=`<div class="stack"><div><h1>今天穿什么</h1><div class="sub">看看天气，记下今天穿了什么、感觉怎么样，下次同样的温度就知道怎么穿</div></div>`;
+  if(!pl){
+    h+=`<section class="panel"><h2>先告诉我在哪里</h2><div class="sub">只用来查天气，地点只存在这台手机上。</div>
+      <div class="row"><button class="btn primary" type="button" data-act="wx-geo">用现在的位置</button></div>
+      <div class="row" style="flex-wrap:nowrap"><input type="text" id="city-q" placeholder="或者搜城市：东京 / 上海 / Osaka" style="flex:1;min-width:0"><button class="btn" type="button" data-act="city-go">搜</button></div><div class="stack" id="city-res" style="gap:6px"></div></section>`;
+  }else if(!wx){h+=`<section class="panel"><div class="sub">${S.wxErr?esc(S.wxErr)+` <button class="btn sm" type="button" data-act="wx-retry">再试一次</button>`:"正在查今天的天气…"}</div></section>`}
+  else{
+    const band=BANDS.find(b=>wx.amax>=b.min);
+    // 自己以前在差不多的温度（体感最高 ±3°）觉得冷还是热
+    const near=mine.filter(o=>o.w&&o.feel!=null&&o.feel!==""&&o.date!==dayKey()&&Math.abs(o.w.amax-wx.amax)<=3);
+    const bias=near.length?near.reduce((s,o)=>s+(+o.feel),0)/near.length:0;
+    const tips=[band.txt];
+    if(near.length&&bias<=-.5)tips.push(`你之前在 ${wx.amax}° 左右常觉得冷，比上面再多穿一点`);
+    if(near.length&&bias>=.5)tips.push(`你之前在 ${wx.amax}° 左右常觉得热，可以穿薄一点`);
+    if(wx.tmax-wx.tmin>=8)tips.push(`早晚温差大（${wx.tmax-wx.tmin}°），穿好穿脱的外套`);
+    if(wx.rain>=50)tips.push(`下雨概率 ${wx.rain}%，带伞，鞋子别穿怕湿的`);
+    h+=`<section class="panel wx"><div class="row between"><span class="sub">${esc(pl.name)}</span><button class="btn sm" type="button" data-act="wx-change">换地方</button></div>
+      <div class="wx-main"><span class="wx-now">${wx.now}°</span><span><b>${WMO(wx.code)}</b><br><span class="sub">体感 ${wx.feel}° · 最高 ${wx.tmax}° 最低 ${wx.tmin}° · 下雨 ${wx.rain}%</span></span></div>
+      <h2 style="margin-top:4px">今天可以这样穿</h2><ul class="tips">${tips.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></section>`;
+    const good=mine.filter(o=>o.w&&String(o.feel)==="0"&&o.date!==dayKey()&&Math.abs(o.w.amax-wx.amax)<=3).slice(0,3);
+    if(good.length)h+=`<section><h2>以前这个温度穿着刚好的</h2>${good.map(o=>outfitLine(o)).join("")}</section>`;
+    const cs=curSeason();
+    const easy=i=>{const l=locById(i.loc);return !!l&&(l.out||!(["cl","bedin","bedwin"].includes(l.spot)||l.kind==="suitcase"))};
+    const pick=activeItems().filter(i=>band.cats.includes(i.cat)&&(i.seasons||[]).includes(cs)&&easy(i)).sort((a,b)=>(a.lastWorn||0)-(b.lastWorn||0)).slice(0,16);
+    if(pick.length)h+=`<section><div class="row between"><h2>衣柜里可以穿的</h2><span class="sub">好久没穿的在前</span></div><div class="strip">${pick.map(i=>cardHTML(i)).join("")}</div></section>`;
+  }
+  if(!S.ro)h+=`<section><div class="row between"><h2>今天穿了</h2><button class="btn ${today?"":"primary"}" type="button" data-act="of-edit" data-date="${dayKey()}">${today?"修改":"＋ 记录今天的穿搭"}</button></div>
+    ${today?outfitLine(today,true):`<div class="empty">出门前选一下今天穿的衣服；晚上回来再点「修改」记感觉也行。</div>`}</section>`;
+  const past=mine.filter(o=>o.date!==dayKey()).slice(0,20);
+  if(past.length)h+=`<section><h2>最近穿过的</h2>${past.map(o=>outfitLine(o)).join("")}</section>`;
+  return h+`</div>`}
+// 记录 / 修改某一天的穿搭：选衣服（多选）＋ 感觉 ＋ 一句话
+function openOutfit(date){
+  const o=myOutfits().find(x=>x.date===date);
+  if(!S.ofDraft||S.ofDraft.date!==date)S.ofDraft={date,sel:new Set(o?o.items||[]:[]),feel:o&&o.feel!=null?String(o.feel):"",note:o?o.note||"":"",cat:""};
+  const d=S.ofDraft,cs=curSeason();
+  const all=activeItems().filter(i=>!d.cat||i.cat===d.cat).sort((a,b)=>((((b.seasons||[]).includes(cs))-((a.seasons||[]).includes(cs)))||((b.lastWorn||0)-(a.lastWorn||0))));
+  const cats=CATS.map(c=>c[0]).filter(c=>activeItems().some(i=>i.cat===c));
+  openSheet(`<div class="row between"><h2>${date===dayKey()?"今天":esc(date)}穿了什么</h2><button class="btn" type="button" data-act="close">关闭</button></div>
+   <div class="f">感觉怎么样<div class="seg" data-ofeel>${FEELS.map(([v,n])=>`<button type="button" data-v="${v}" aria-pressed="${d.feel===v}">${n}</button>`).join("")}</div></div>
+   <label class="f">想记一句（可不填）<input type="text" id="of-note" value="${esc(d.note)}" placeholder="比如：外套太薄，下午风大"></label>
+   <div class="row between"><b>选今天穿的</b><span class="sub">已选 ${d.sel.size} 件</span></div>
+   <div class="chips" data-ofcat><button class="chip" type="button" data-v="" aria-pressed="${!d.cat}">全部</button>${cats.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.cat===c}">${esc(c)}</button>`).join("")}</div>
+   ${all.length?`<div class="grid">${all.map(i=>cardHTML(i,{selectable:true,sel:d.sel.has(i.id),pickKey:"of",sub:i.cat})).join("")}</div>`:`<div class="empty">这一类还没有录入衣服</div>`}
+   <div class="row" style="position:sticky;bottom:0;background:var(--bg);padding:8px 0"><button class="btn primary" type="button" data-act="of-save">保存</button>${o?`<span id="ofdel-zone"><button class="btn danger" type="button" data-act="of-del-ask">删除这天</button></span>`:""}</div>`)}
+function reopenOutfit(){const n=$("#of-note");if(n&&S.ofDraft)S.ofDraft.note=n.value;const top=$(".sheet")?.scrollTop||0;openOutfit(S.ofDraft.date);const sh=$(".sheet");if(sh){sh.style.animation="none";sh.scrollTop=top}}
+async function saveOutfit(){
+  const d=S.ofDraft;if(!d)return;d.note=($("#of-note")?.value||"").trim();
+  const old=myOutfits().find(x=>x.date===d.date),id=d.date+"_"+S.user.uid,ids=[...d.sel];
+  const body={by:(S.user.email||"").toLowerCase(),date:d.date,items:ids,feel:d.feel===""?null:+d.feel,note:d.note,updated:Date.now()};
+  if(d.date===dayKey()&&S.wx)body.w={tmax:S.wx.tmax,tmin:S.wx.tmin,amax:S.wx.amax,amin:S.wx.amin,code:S.wx.code,rain:S.wx.rain};
+  try{await S.db.doc("outfits/"+id).set(body,{merge:true});
+    // 新选上的衣服顺便记一次「穿了」，和详情里点「今天穿了」一样
+    const before=new Set(old?old.items||[]:[]);
+    for(const i of ids.filter(x=>!before.has(x)).map(x=>S.items.find(y=>y.id===x)).filter(Boolean))
+      await S.db.doc("items/"+i.id).update({lastWorn:Date.now(),wornCount:(i.wornCount||0)+1});
+    S.ofDraft=null;closeSheet();toast("记下了")}catch(_){toast("没保存成功")}}
 
 /* ---------- review ---------- */
 function reviewHTML(){
@@ -720,6 +836,9 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,[data-spot]");if(!t)return;
   if(t.id==="fab"){openForm(null);return}
   if(t.dataset.item&&!t.dataset.pick){openItem(t.dataset.item);return}
+  if(t.dataset.item&&t.dataset.pick==="of"){const id=t.dataset.item,s=S.ofDraft.sel;s.has(id)?s.delete(id):s.add(id);reopenOutfit();return}
+  if(t.closest("[data-ofeel]")&&t.dataset.v!=null){S.ofDraft.note=$("#of-note")?.value||"";S.ofDraft.feel=S.ofDraft.feel===t.dataset.v?"":t.dataset.v;reopenOutfit();return}
+  if(t.closest("[data-ofcat]")&&t.dataset.v!=null){S.ofDraft.cat=t.dataset.v;reopenOutfit();return}
   if(t.dataset.item&&t.dataset.pick==="loc"){const id=t.dataset.item;S.locSel.has(id)?S.locSel.delete(id):S.locSel.add(id);reopenLoc(S.locSelFor);return}
   if(t.dataset.item&&t.dataset.pick){const id=t.dataset.item;S.sortSel.has(id)?S.sortSel.delete(id):S.sortSel.add(id);renderKeep();return}
   if(t.dataset.loc&&!t.dataset.act){openLoc(t.dataset.loc);return}
@@ -776,6 +895,16 @@ document.addEventListener("click",async e=>{
   else if(a==="brand-pick"){const inp=$("#fm-brand");if(inp)inp.value=t.dataset.v;t.parentElement.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",String(c===t)));if(typeof checkDup==="function")checkDup()}
   else if(a==="dup-move"){const hit=S.items.find(x=>x.id===draft._dupId);const to=$("#fm-loc").value;if(!hit||!to)return;t.disabled=true;
     try{await S.db.doc("items/"+hit.id).update({loc:to});hit.loc=to;closeSheet();toast(`已把「${itemTitle(hit)}」移到 ${locName(to)}，没有新增`)}catch(_){t.disabled=false;toast("没保存成功")}}
+  else if(a==="wx-geo")useMyLocation();
+  else if(a==="city-go")searchCity(($("#city-q")?.value||"").trim());
+  else if(a==="city-pick"){const r=(S.cityRes||[])[+t.dataset.k];if(r)setWxPlace({name:r.name,lat:+r.latitude.toFixed(2),lon:+r.longitude.toFixed(2)});renderKeep()}
+  else if(a==="wx-change"){try{localStorage.removeItem("wxPlace")}catch(_){}S.wx=null;renderKeep()}
+  else if(a==="wx-retry")loadWeather(true);
+  else if(a==="of-edit"){S.ofDraft=null;openOutfit(t.dataset.date)}
+  else if(a==="of-open"){if(!S.ro){S.ofDraft=null;openOutfit(t.dataset.date)}}
+  else if(a==="of-save")saveOutfit();
+  else if(a==="of-del-ask"){$("#ofdel-zone").innerHTML=`<button class="btn danger" type="button" data-act="of-del">确定删除</button>`}
+  else if(a==="of-del"){try{await S.db.doc("outfits/"+S.ofDraft.date+"_"+S.user.uid).delete();S.ofDraft=null;closeSheet();toast("已删除")}catch(_){toast("没删除成功")}}
   else if(a==="go-review"){S.tab="review";render();window.scrollTo(0,0)}
   else if(a==="go-sort"){S.tab="sort";render();window.scrollTo(0,0)}
   else if(a==="sim-pick"){draft._simPick=t.dataset.id;draft._dupOk=false;$("#sim-zone").innerHTML="";checkDup(true)}
@@ -812,6 +941,7 @@ document.addEventListener("change",e=>{
   if(e.target.id==="fLoc"){S.fLoc=e.target.value;e.target.blur();renderKeep()}
   if(e.target.id==="sortTarget"){S.sortTarget=e.target.value;e.target.blur();renderKeep()}
 });
+document.addEventListener("keydown",e=>{if(e.target.id==="city-q"&&e.key==="Enter"&&!e.isComposing){e.preventDefault();searchCity(e.target.value.trim())}});
 document.addEventListener("compositionstart",e=>{if(e.target.id==="gq")S.composing=true});
 document.addEventListener("compositionend",e=>{if(e.target.id==="gq"){S.composing=false;S.gq=e.target.value;clearTimeout(S.qt);updateHomeBody()}});
 document.addEventListener("input",e=>{
@@ -884,6 +1014,7 @@ function start(){
     if(!S.ro)await seedIfEmpty(db);
     const err=e=>{console.warn(e);toast(e&&e.code==="permission-denied"?"这个账号没有权限查看":"连接中断，刷新页面试试")};
     unsubs.push(db.collection("items").onSnapshot(s=>{S.items=s.docs.map(d=>({id:d.id,...d.data()}));S.loaded.i=true;render()},err));
+    unsubs.push(db.collection("outfits").where("by","==",(user.email||"").toLowerCase()).onSnapshot(s=>{S.outfits=s.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==="today")renderKeep()},e=>console.warn(e)));
     unsubs.push(db.collection("locations").orderBy("order").onSnapshot(s=>{S.locs=s.docs.map(d=>({id:d.id,...d.data()}));S.loaded.l=true;render();
       const h=location.hash.slice(1);if(h&&locById(h)&&!S.hashDone){S.hashDone=true;S.tab="map";render();openLoc(h)}},err));
   });
