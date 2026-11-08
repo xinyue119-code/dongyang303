@@ -248,8 +248,8 @@ function defaultReviewSeason(){const m=new Date().getMonth()+1;const cur=curSeas
 const modesOf = l => { if(!l) return ["item"]; if(Array.isArray(l.modes)&&l.modes.length) return l.modes; if(l.mode) return [l.mode]; return l.record===false?["list"]:["item"] };
 const hasMode = (l,m) => modesOf(l).includes(m);
 // 三个整理 app 互相跳转：首页最上面放另外两个的入口
-const APPS=[["closet","衣帽间","衣服和鞋","https://xinyue119-code.github.io/dongyang303/"],["zw","杂物间","杂物和存货","https://xinyue119-code.github.io/dongyang303-zawu/"],["cos","化妆台","化妆品","https://xinyue119-code.github.io/dongyang303-cosme/"]];
-const hopsHTML = me => `<nav class="hops" aria-label="另外两个整理 app">${APPS.filter(a=>a[0]!==me).map(([,n,sub,u])=>`<a class="hop" href="${u}"><img src="${u}icon-192.png" alt=""><span><b>${n}</b><span>${sub}</span></span></a>`).join("")}</nav>`;
+const APPS=[["closet","衣帽间","衣服和鞋","https://xinyue119-code.github.io/dongyang303/"],["zw","杂物间","杂物和存货","https://xinyue119-code.github.io/dongyang303-zawu/"],["cos","化妆台","化妆品","https://xinyue119-code.github.io/dongyang303-cosme/"],["fd","厨房","吃的和调料","https://xinyue119-code.github.io/dongyang303-food/"]];
+const hopsHTML = me => `<nav class="hops" aria-label="其他整理 app">${APPS.filter(a=>a[0]!==me).map(([,n,sub,u])=>`<a class="hop" href="${u}"><img src="${u}icon-192.png" alt=""><span><b>${n}</b><span>${sub}</span></span></a>`).join("")}</nav>`;
 const catIcon = (c,size="") => {const d=(window.CAT_ICONS||{})[c];return d?`<span class="ci ${size}" style="--h:${d[0]}" aria-hidden="true"><svg viewBox="0 0 24 24">${d[1]}</svg></span>`:""};
 const locById = id => S.locs.find(l=>l.id===id);
 const itemLocs = () => S.locs.filter(l=>hasMode(l,"item"));
