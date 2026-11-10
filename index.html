@@ -525,15 +525,17 @@ async function searchCity(q){const box=$("#city-res");if(!q||!box)return;box.inn
     S.cityRes=rs;
     box.innerHTML=rs.length?rs.map((r,k)=>`<button class="loc-row" type="button" data-act="city-pick" data-k="${k}"><span class="grow"><b>${esc(r.name)}</b><span>${esc([r.admin1,r.country].filter(Boolean).join(" · "))}</span></span></button>`).join(""):'<div class="sub">没找到，换个写法试试（比如用英文或日文）</div>'}
   catch(_){box.innerHTML='<div class="sub">没搜到，检查一下网络</div>'}}
-const myOutfits=()=>(S.outfits||[]).filter(o=>o.by===(S.user?.email||"").toLowerCase()).sort((a,b)=>a.date<b.date?1:-1);
+// 一天可以有好几套（2026-11-10 起）：每套一条，按日期新的在前，同一天按先记的在前
+const myOutfits=()=>(S.outfits||[]).filter(o=>o.by===(S.user?.email||"").toLowerCase()).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(a.created||a.updated||0)-(b.created||b.updated||0));
+const OF_LABELS=["上班","出门","运动","在家","约会"];
 function outfitLine(o,big){const its=(o.items||[]).map(id=>S.items.find(i=>i.id===id)).filter(Boolean);
   const w=o.w?`${o.w.tmax}°/${o.w.tmin}° ${WMO(o.w.code)}`:"";
-  return `<button class="panel outfit" type="button" data-act="of-open" data-date="${esc(o.date)}">
-   <div class="row between"><b>${o.date===dayKey()?"今天":esc(o.date.slice(5).replace("-","/"))}</b><span class="sub">${esc(w)}${o.feel!=null&&o.feel!==""?` · <span class="feel f${esc(o.feel)}">${esc(feelName(o.feel))}</span>`:""}</span></div>
+  return `<button class="panel outfit" type="button" data-act="of-open" data-id="${esc(o.id)}">
+   <div class="row between"><b>${o.date===dayKey()?"今天":esc(o.date.slice(5).replace("-","/"))}${o.label?` · ${esc(o.label)}`:""}</b><span class="sub">${esc(w)}${o.feel!=null&&o.feel!==""?` · <span class="feel f${esc(o.feel)}">${esc(feelName(o.feel))}</span>`:""}</span></div>
    ${its.length?`<div class="of-thumbs">${its.slice(0,big?12:6).map(i=>i.thumb?`<img src="${i.thumb}" alt="${esc(itemTitle(i))}">`:`<span class="of-ph">${catIcon(i.cat)}</span>`).join("")}</div>`:""}
    ${o.note?`<div class="sub" style="text-align:left">${esc(o.note)}</div>`:""}</button>`}
 function todayHTML(){
-  const pl=wxPlace(),wx=S.wx,mine=myOutfits(),today=mine.find(o=>o.date===dayKey());
+  const pl=wxPlace(),wx=S.wx,mine=myOutfits(),todays=mine.filter(o=>o.date===dayKey());
   let h=`<div class="stack"><div><h1>今天穿什么</h1><div class="sub">看看天气，记下今天穿了什么、感觉怎么样，下次同样的温度就知道怎么穿</div></div>`;
   if(!pl){
     h+=`<section class="panel"><h2>先告诉我在哪里</h2><div class="sub">只用来查天气，地点只存在这台手机上。</div>
@@ -560,36 +562,41 @@ function todayHTML(){
     const pick=activeItems().filter(i=>band.cats.includes(i.cat)&&(i.seasons||[]).includes(cs)&&easy(i)).sort((a,b)=>(a.lastWorn||0)-(b.lastWorn||0)).slice(0,16);
     if(pick.length)h+=`<section><div class="row between"><h2>衣柜里可以穿的</h2><span class="sub">好久没穿的在前</span></div><div class="strip">${pick.map(i=>cardHTML(i)).join("")}</div></section>`;
   }
-  if(!S.ro)h+=`<section><div class="row between"><h2>今天穿了</h2><button class="btn ${today?"":"primary"}" type="button" data-act="of-edit" data-date="${dayKey()}">${today?"修改":"＋ 记录今天的穿搭"}</button></div>
-    ${today?outfitLine(today,true):`<div class="empty">出门前选一下今天穿的衣服；晚上回来再点「修改」记感觉也行。</div>`}</section>`;
+  if(!S.ro)h+=`<section><div class="row between"><h2>今天穿了${todays.length>1?` ${todays.length} 套`:""}</h2><button class="btn ${todays.length?"":"primary"}" type="button" data-act="of-new">${todays.length?"＋ 再记一套":"＋ 记录今天的穿搭"}</button></div>
+    ${todays.length?todays.map(o=>outfitLine(o,true)).join("")+`<div class="sub">点一套可以修改，晚上回来补感觉也行。</div>`:`<div class="empty">出门前选一下今天穿的衣服；换了一身（比如上班一套、运动一套）就再记一套。</div>`}</section>`;
   const past=mine.filter(o=>o.date!==dayKey()).slice(0,20);
   if(past.length)h+=`<section><h2>最近穿过的</h2>${past.map(o=>outfitLine(o)).join("")}</section>`;
   return h+`</div>`}
-// 记录 / 修改某一天的穿搭：选衣服（多选）＋ 感觉 ＋ 一句话
-function openOutfit(date){
-  const o=myOutfits().find(x=>x.date===date);
-  if(!S.ofDraft||S.ofDraft.date!==date)S.ofDraft={date,sel:new Set(o?o.items||[]:[]),feel:o&&o.feel!=null?String(o.feel):"",note:o?o.note||"":"",cat:""};
-  const d=S.ofDraft,cs=curSeason();
+// 记录 / 修改一套穿搭：选衣服（多选）＋ 这套是什么场合（可不填）＋ 感觉 ＋ 一句话。id 为空 = 新的一套
+function openOutfit(id){
+  const o=id?myOutfits().find(x=>x.id===id):null,key=id||"new";
+  if(!S.ofDraft||S.ofDraft._for!==key)S.ofDraft={_for:key,id:o?o.id:"",date:o?o.date:dayKey(),label:o?o.label||"":"",sel:new Set(o?o.items||[]:[]),feel:o&&o.feel!=null?String(o.feel):"",note:o?o.note||"":"",cat:""};
+  const d=S.ofDraft,cs=curSeason(),date=d.date;
   const all=activeItems().filter(i=>!d.cat||i.cat===d.cat).sort((a,b)=>((((b.seasons||[]).includes(cs))-((a.seasons||[]).includes(cs)))||((b.lastWorn||0)-(a.lastWorn||0))));
   const cats=CATS.map(c=>c[0]).filter(c=>activeItems().some(i=>i.cat===c));
   openSheet(`<div class="row between"><h2>${date===dayKey()?"今天":esc(date)}穿了什么</h2><button class="btn" type="button" data-act="close">关闭</button></div>
+   <div class="f">这套是（可不填）<input type="text" id="of-label" value="${esc(d.label)}" placeholder="比如：上班、运动"><div class="chips" data-oflabel>${OF_LABELS.map(n=>`<button class="chip" type="button" data-v="${n}" aria-pressed="${d.label===n}">${n}</button>`).join("")}</div></div>
    <div class="f">感觉怎么样<div class="seg" data-ofeel>${FEELS.map(([v,n])=>`<button type="button" data-v="${v}" aria-pressed="${d.feel===v}">${n}</button>`).join("")}</div></div>
    <label class="f">想记一句（可不填）<input type="text" id="of-note" value="${esc(d.note)}" placeholder="比如：外套太薄，下午风大"></label>
    <div class="row between"><b>选今天穿的</b><span class="sub">已选 ${d.sel.size} 件</span></div>
    <div class="chips" data-ofcat><button class="chip" type="button" data-v="" aria-pressed="${!d.cat}">全部</button>${cats.map(c=>`<button class="chip" type="button" data-v="${esc(c)}" aria-pressed="${d.cat===c}">${esc(c)}</button>`).join("")}</div>
    ${all.length?`<div class="grid">${all.map(i=>cardHTML(i,{selectable:true,sel:d.sel.has(i.id),pickKey:"of",sub:i.cat})).join("")}</div>`:`<div class="empty">这一类还没有录入衣服</div>`}
-   <div class="row" style="position:sticky;bottom:0;background:var(--bg);padding:8px 0"><button class="btn primary" type="button" data-act="of-save">保存</button>${o?`<span id="ofdel-zone"><button class="btn danger" type="button" data-act="of-del-ask">删除这天</button></span>`:""}</div>`)}
-function reopenOutfit(){const n=$("#of-note");if(n&&S.ofDraft)S.ofDraft.note=n.value;const top=$(".sheet")?.scrollTop||0;openOutfit(S.ofDraft.date);const sh=$(".sheet");if(sh){sh.style.animation="none";sh.scrollTop=top}}
+   <div class="row" style="position:sticky;bottom:0;background:var(--bg);padding:8px 0"><button class="btn primary" type="button" data-act="of-save">保存</button>${o?`<span id="ofdel-zone"><button class="btn danger" type="button" data-act="of-del-ask">删除这套</button></span>`:""}</div>`)}
+function reopenOutfit(){const n=$("#of-note"),lb=$("#of-label");if(n&&S.ofDraft)S.ofDraft.note=n.value;if(lb&&S.ofDraft)S.ofDraft.label=lb.value;const top=$(".sheet")?.scrollTop||0;openOutfit(S.ofDraft.id);const sh=$(".sheet");if(sh){sh.style.animation="none";sh.scrollTop=top}}
 async function saveOutfit(){
-  const d=S.ofDraft;if(!d)return;d.note=($("#of-note")?.value||"").trim();
-  const old=myOutfits().find(x=>x.date===d.date),id=d.date+"_"+S.user.uid,ids=[...d.sel];
-  const body={by:(S.user.email||"").toLowerCase(),date:d.date,items:ids,feel:d.feel===""?null:+d.feel,note:d.note,updated:Date.now()};
+  const d=S.ofDraft;if(!d)return;d.note=($("#of-note")?.value||"").trim();d.label=($("#of-label")?.value||"").trim();
+  // 以前一天一条（文档名 日期_uid）的照旧；新的一套文档名后面再加时间，同一天就能有好几条
+  const old=d.id?myOutfits().find(x=>x.id===d.id):null,id=d.id||d.date+"_"+S.user.uid+"_"+Date.now().toString(36),ids=[...d.sel];
+  const body={by:(S.user.email||"").toLowerCase(),date:d.date,label:d.label,items:ids,feel:d.feel===""?null:+d.feel,note:d.note,updated:Date.now()};
+  if(!old)body.created=Date.now();
   if(d.date===dayKey()&&S.wx)body.w={tmax:S.wx.tmax,tmin:S.wx.tmin,amax:S.wx.amax,amin:S.wx.amin,code:S.wx.code,rain:S.wx.rain};
   try{await S.db.doc("outfits/"+id).set(body,{merge:true});
     // 新选上的衣服顺便记一次「穿了」，和详情里点「今天穿了」一样
     const before=new Set(old?old.items||[]:[]);
+    // 同一天另一套里已经算过一次的，不再重复加
+    const t0=new Date().setHours(0,0,0,0);
     for(const i of ids.filter(x=>!before.has(x)).map(x=>S.items.find(y=>y.id===x)).filter(Boolean))
-      await S.db.doc("items/"+i.id).update({lastWorn:Date.now(),wornCount:(i.wornCount||0)+1});
+      if(!(d.date===dayKey()&&(i.lastWorn||0)>=t0))await S.db.doc("items/"+i.id).update({lastWorn:Date.now(),wornCount:(i.wornCount||0)+1});
     S.ofDraft=null;closeSheet();toast("记下了")}catch(_){toast("没保存成功")}}
 
 /* ---------- review ---------- */
@@ -839,6 +846,7 @@ document.addEventListener("click",async e=>{
   if(t.dataset.item&&t.dataset.pick==="of"){const id=t.dataset.item,s=S.ofDraft.sel;s.has(id)?s.delete(id):s.add(id);reopenOutfit();return}
   if(t.closest("[data-ofeel]")&&t.dataset.v!=null){S.ofDraft.note=$("#of-note")?.value||"";S.ofDraft.feel=S.ofDraft.feel===t.dataset.v?"":t.dataset.v;reopenOutfit();return}
   if(t.closest("[data-ofcat]")&&t.dataset.v!=null){S.ofDraft.cat=t.dataset.v;reopenOutfit();return}
+  if(t.closest("[data-oflabel]")&&t.dataset.v!=null){const lb=$("#of-label");if(lb)lb.value=lb.value===t.dataset.v?"":t.dataset.v;t.parentElement.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.v===lb.value)));return}
   if(t.dataset.item&&t.dataset.pick==="loc"){const id=t.dataset.item;S.locSel.has(id)?S.locSel.delete(id):S.locSel.add(id);reopenLoc(S.locSelFor);return}
   if(t.dataset.item&&t.dataset.pick){const id=t.dataset.item;S.sortSel.has(id)?S.sortSel.delete(id):S.sortSel.add(id);renderKeep();return}
   if(t.dataset.loc&&!t.dataset.act){openLoc(t.dataset.loc);return}
@@ -900,11 +908,11 @@ document.addEventListener("click",async e=>{
   else if(a==="city-pick"){const r=(S.cityRes||[])[+t.dataset.k];if(r)setWxPlace({name:r.name,lat:+r.latitude.toFixed(2),lon:+r.longitude.toFixed(2)});renderKeep()}
   else if(a==="wx-change"){try{localStorage.removeItem("wxPlace")}catch(_){}S.wx=null;renderKeep()}
   else if(a==="wx-retry")loadWeather(true);
-  else if(a==="of-edit"){S.ofDraft=null;openOutfit(t.dataset.date)}
-  else if(a==="of-open"){if(!S.ro){S.ofDraft=null;openOutfit(t.dataset.date)}}
+  else if(a==="of-new"){S.ofDraft=null;openOutfit("")}
+  else if(a==="of-open"){if(!S.ro){S.ofDraft=null;openOutfit(t.dataset.id)}}
   else if(a==="of-save")saveOutfit();
   else if(a==="of-del-ask"){$("#ofdel-zone").innerHTML=`<button class="btn danger" type="button" data-act="of-del">确定删除</button>`}
-  else if(a==="of-del"){try{await S.db.doc("outfits/"+S.ofDraft.date+"_"+S.user.uid).delete();S.ofDraft=null;closeSheet();toast("已删除")}catch(_){toast("没删除成功")}}
+  else if(a==="of-del"){try{await S.db.doc("outfits/"+S.ofDraft.id).delete();S.ofDraft=null;closeSheet();toast("已删除")}catch(_){toast("没删除成功")}}
   else if(a==="go-review"){S.tab="review";render();window.scrollTo(0,0)}
   else if(a==="go-sort"){S.tab="sort";render();window.scrollTo(0,0)}
   else if(a==="sim-pick"){draft._simPick=t.dataset.id;draft._dupOk=false;$("#sim-zone").innerHTML="";checkDup(true)}
