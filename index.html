@@ -629,8 +629,9 @@ function closeSheet(){S.openLocId=null;$("#sheet-root").innerHTML="";document.bo
 $("#sheet-root").addEventListener("click",e=>{if(e.target.id==="sbg")closeSheet()});
 
 let draft=null;
-function openForm(item){
-  const st=S.sticky;
+// pre：从地图上某个位置里点「录入到这里」时带进来的 {loc}，位置先选好
+function openForm(item,pre){
+  const st=pre?{...S.sticky,...pre}:S.sticky;
   draft=item?{...item,colors:[...(item.colors||[])],seasons:[...(item.seasons||[])],_file:null,_preview:item.thumb||""}
     :{cat:st.cat,seasons:st.seasons?[...st.seasons]:[curSeason()],colors:[],loc:st.loc,note:"",_file:null,_preview:""};
   renderForm();
@@ -797,10 +798,11 @@ function openLoc(id){
   const pick=S.locSelFor===id&&!S.ro, sel=S.locSel;
   if(pick)[...sel].forEach(x=>{if(!its.some(i=>i.id===x))sel.delete(x)});
   let body=`${!l.out?`<label class="f">现在有多满<div class="chips" data-locfill="${esc(l.id)}">${FILLS.map(f=>`<button class="chip" type="button" data-v="${f}" aria-pressed="${l.fill===f}" ${S.ro?"disabled":""}>${f}</button>`).join("")}</div></label>`:""}
+     ${S.ro?"":`<div class="row"><button class="btn primary" type="button" data-act="loc-entry" data-id="${esc(id)}">＋ 录入到这里</button></div>`}
      ${its.length&&!S.ro?`<div class="row between"><span class="sub">${pick?`已选 ${sel.size} / ${its.length} 件`:`${its.length} 件`}</span><div class="row">${pick?`<button class="btn" type="button" data-act="lsel-all" data-id="${esc(id)}">${sel.size===its.length?"全不选":"全选"}</button>`:""}<button class="btn" type="button" data-act="lsel-toggle" data-id="${esc(id)}">${pick?"完成":"多选"}</button></div></div>`:""}
      ${pick?`<div class="panel"><label class="f">批量移动到<select id="lmove-to"><option value="">选择一个位置…</option>${itemLocs().filter(x=>x.id!==id).map(x=>`<option value="${esc(x.id)}">${esc((x.code?x.code+"  ":"")+x.name)}</option>`).join("")}<option value="_none">待整理（先拿出来）</option></select></label>
        <div class="row"><button class="btn primary" type="button" data-act="lmove" data-id="${esc(id)}" ${sel.size?"":"disabled"}>移动 ${sel.size} 件</button></div></div>`:""}
-     ${its.length?`<div class="grid">${its.map(i=>cardHTML(i,pick?{sub:i.cat,selectable:true,sel:sel.has(i.id),pickKey:"loc"}:{sub:i.cat})).join("")}</div>`:`<div class="empty">这里还没有记录东西。${S.ro?"":"录入时选这个位置，或在「整理」里把待整理的放进来。"}</div>`}`;
+     ${its.length?`<div class="grid">${its.map(i=>cardHTML(i,pick?{sub:i.cat,selectable:true,sel:sel.has(i.id),pickKey:"loc"}:{sub:i.cat})).join("")}</div>`:`<div class="empty">这里还没有记录东西。${S.ro?"":"点上面的「＋ 录入到这里」拍一件，或在「整理」里把待整理的放进来。"}</div>`}`;
   if(modesOf(l).length>1)body+=`<div class="sub">这里还记了杂物，${zawuLink("去杂物间看",id)}。</div>`;
   openSheet(`${head}
    <div class="sub">${esc([SPOTS[l.spot],l.note].filter(Boolean).join(" · "))}</div>
@@ -842,6 +844,7 @@ function openNewLoc(pre){
 document.addEventListener("click",async e=>{
   const t=e.target.closest("button,[data-spot]");if(!t)return;
   if(t.id==="fab"){openForm(null);return}
+  if(t.dataset.act==="loc-entry"){openForm(null,{loc:t.dataset.id});return}
   if(t.dataset.item&&!t.dataset.pick){openItem(t.dataset.item);return}
   if(t.dataset.item&&t.dataset.pick==="of"){const id=t.dataset.item,s=S.ofDraft.sel;s.has(id)?s.delete(id):s.add(id);reopenOutfit();return}
   if(t.closest("[data-ofeel]")&&t.dataset.v!=null){S.ofDraft.note=$("#of-note")?.value||"";S.ofDraft.feel=S.ofDraft.feel===t.dataset.v?"":t.dataset.v;reopenOutfit();return}
